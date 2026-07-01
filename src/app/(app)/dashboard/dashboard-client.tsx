@@ -8,7 +8,7 @@ import { EquityCurveChart } from "@/components/charts/equity-curve-chart";
 import { useJournalTrades } from "@/hooks/use-journal-trades";
 import { useUIStore } from "@/store/ui-store";
 import { computeMetrics, buildEquityCurve } from "@/lib/metrics";
-import { formatCurrency, formatDate, formatPercent, formatSignedCurrency } from "@/lib/format";
+import { formatDate, formatPercent, formatSignedPercent } from "@/lib/format";
 import type { Trade } from "@/types/trade";
 
 interface DashboardClientProps {
@@ -33,7 +33,7 @@ export function DashboardClient({ live, backtest }: DashboardClientProps) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <MetricCard
           label="P&L Neto Total"
-          value={formatSignedCurrency(metrics.netPnl)}
+          value={formatSignedPercent(metrics.netPnl)}
           tone={metrics.netPnl >= 0 ? "pos" : "neg"}
           hint={`${metrics.totalTrades} operaciones`}
         />
@@ -86,7 +86,7 @@ export function DashboardClient({ live, backtest }: DashboardClientProps) {
                       </div>
                     </div>
                     <span className={`font-mono text-sm ${win ? "text-pos" : "text-neg"}`}>
-                      {formatSignedCurrency(trade.pnl ?? 0)}
+                      {formatSignedPercent(trade.pnl ?? 0)}
                     </span>
                   </button>
                 );
@@ -114,7 +114,7 @@ export function DashboardClient({ live, backtest }: DashboardClientProps) {
                 label="Risk / Reward"
                 value={metrics.riskReward !== null ? metrics.riskReward.toFixed(2) : "—"}
               />
-              <Row label="Máx. drawdown" value={formatCurrency(metrics.maxDrawdown)} />
+              <Row label="Máx. drawdown" value={formatPercent(metrics.maxDrawdown)} />
               <Row
                 label="Racha actual"
                 value={

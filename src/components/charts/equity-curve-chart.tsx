@@ -2,7 +2,7 @@
 
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { EquityPoint } from "@/lib/metrics";
-import { formatCurrencyCompact, formatDate, formatSignedCurrency } from "@/lib/format";
+import { formatDate, formatSignedPercent } from "@/lib/format";
 
 interface EquityCurveChartProps {
   data: EquityPoint[];
@@ -38,7 +38,7 @@ export function EquityCurveChart({ data }: EquityCurveChartProps) {
           minTickGap={32}
         />
         <YAxis
-          tickFormatter={(v) => formatCurrencyCompact(v)}
+          tickFormatter={(v) => formatSignedPercent(v)}
           tick={{ fontSize: 11, fill: "var(--ink-3)" }}
           axisLine={false}
           tickLine={false}
@@ -52,7 +52,7 @@ export function EquityCurveChart({ data }: EquityCurveChartProps) {
             fontSize: 12,
           }}
           labelFormatter={(v) => formatDate(v as string)}
-          formatter={(value) => [formatSignedCurrency(Number(value)), "Capital acumulado"]}
+          formatter={(value) => [formatSignedPercent(Number(value)), "Capital acumulado"]}
         />
         <Area
           type="monotone"

@@ -36,7 +36,7 @@ export function Sidebar({ email, isDemo }: SidebarProps) {
   const initials = (email ?? "JW").slice(0, 2).toUpperCase();
 
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r border-line bg-surface lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-line bg-surface lg:flex">
       <div className="flex items-center gap-2 px-6 py-6">
         <span className="flex size-8 items-center justify-center rounded-lg bg-ink">
           <span className="size-3.5 rounded-full border-2 border-bg" />

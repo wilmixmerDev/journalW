@@ -1,4 +1,4 @@
-import type { Direction, JournalType, Trade } from "@/types/trade";
+import type { Direction, Importance, JournalType, ResultType, Trade } from "@/types/trade";
 
 // Deterministic PRNG (mulberry32) so mock data is stable across renders/reloads.
 function mulberry32(seed: number) {
@@ -23,6 +23,8 @@ const INSTRUMENTS: { symbol: string; market: string }[] = [
   { symbol: "XAU/USD", market: "Materias primas" },
   { symbol: "AAPL", market: "Acciones" },
   { symbol: "TSLA", market: "Acciones" },
+  { symbol: "ES", market: "Futuros" },
+  { symbol: "NQ", market: "Futuros" },
 ];
 
 const STRATEGIES = [
@@ -36,16 +38,10 @@ const STRATEGIES = [
 
 const SESSIONS = ["Asia", "Londres", "Nueva York", "Solapamiento Londres-NY"];
 
-const TAG_POOL = ["A+ Setup", "Revenge trade", "Sobre-apalancado", "Plan seguido", "Noticias", "Scalp", "Swing"];
+const IMPORTANCE_LEVELS: Importance[] = ["a_plus", "media", "baja"];
 
 function pick<T>(rng: () => number, items: T[]): T {
   return items[Math.floor(rng() * items.length)];
-}
-
-function pickTags(rng: () => number): string[] {
-  const count = 1 + Math.floor(rng() * 3);
-  const shuffled = [...TAG_POOL].sort(() => rng() - 0.5);
-  return shuffled.slice(0, count);
 }
 
 interface GenerateOptions {
@@ -74,18 +70,18 @@ export function generateMockTrades({
     const exitedAt = new Date(enteredAt.getTime() + (15 + rng() * 240) * 60 * 1000);
 
     const win = rng() > 0.46;
-    const rMultiple = win ? 0.3 + rng() * 3.2 : -(0.3 + rng() * 1.4);
-    const riskUnit = 40 + rng() * 160;
-    const pnl = Math.round(rMultiple * riskUnit * 100) / 100;
+    const resultType: ResultType = win ? "tp" : "sl";
+    const rMultiple = win ? Math.round((0.3 + rng() * 3.2) * 100) / 100 : -1;
+    const riskPercent = Math.round((0.25 + rng() * 1.75) * 100) / 100;
+    const pnl = Math.round(riskPercent * rMultiple * 100) / 100;
 
     const entryPrice = Math.round((50 + rng() * 200) * 100) / 100;
     const stopDistance = entryPrice * (0.003 + rng() * 0.01);
-    const stopPrice =
-      direction === "long" ? entryPrice - stopDistance : entryPrice + stopDistance;
-    const exitPrice =
+    const stopPrice = direction === "long" ? entryPrice - stopDistance : entryPrice + stopDistance;
+    const takeProfitPrice =
       direction === "long"
-        ? entryPrice + stopDistance * rMultiple
-        : entryPrice - stopDistance * rMultiple;
+        ? entryPrice + stopDistance * Math.abs(rMultiple)
+        : entryPrice - stopDistance * Math.abs(rMultiple);
 
     trades.push({
       id: `mock-${journalType}-${i}`,
@@ -97,16 +93,17 @@ export function generateMockTrades({
       direction,
       entryPrice,
       stopPrice: Math.round(stopPrice * 100) / 100,
-      exitPrice: Math.round(exitPrice * 100) / 100,
-      size: Math.round((0.5 + rng() * 4.5) * 100) / 100,
+      takeProfitPrice: Math.round(takeProfitPrice * 100) / 100,
+      riskPercent,
+      resultType,
+      importance: pick(rng, IMPORTANCE_LEVELS),
       enteredAt: enteredAt.toISOString(),
       exitedAt: exitedAt.toISOString(),
       strategy: pick(rng, STRATEGIES),
       session: pick(rng, SESSIONS),
-      tags: pickTags(rng),
       screenshots: [],
       pnl,
-      rMultiple: Math.round(rMultiple * 100) / 100,
+      rMultiple,
       followedPlan: rng() > 0.22,
       notes:
         rng() > 0.5

@@ -4,8 +4,15 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useUIStore } from "@/store/ui-store";
-import { formatDateTime, formatR, formatSignedCurrency } from "@/lib/format";
+import { formatDateTime, formatR, formatSignedPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import type { Importance } from "@/types/trade";
+
+const IMPORTANCE_LABELS: Record<Importance, string> = {
+  a_plus: "A+",
+  media: "Media",
+  baja: "Baja",
+};
 
 export function TradeDetailSheet() {
   const trade = useUIStore((s) => s.selectedTrade);
@@ -32,12 +39,20 @@ export function TradeDetailSheet() {
 
             <div className="flex-1 space-y-6 overflow-y-auto px-4 pb-4">
               <div className="grid grid-cols-2 gap-3">
-                <Stat label="P&L" value={formatSignedCurrency(trade.pnl ?? 0)} tone={win ? "pos" : "neg"} />
+                <Stat label="P&L" value={formatSignedPercent(trade.pnl ?? 0)} tone={win ? "pos" : "neg"} />
                 <Stat label="R-Multiple" value={formatR(trade.rMultiple ?? 0)} tone={win ? "pos" : "neg"} />
+                <Stat label="Riesgo" value={`${trade.riskPercent}%`} />
+                <Stat
+                  label="Resultado"
+                  value={trade.resultType === "tp" ? "Take Profit" : trade.resultType === "sl" ? "Stop Loss" : "—"}
+                />
                 <Stat label="Entrada" value={trade.entryPrice?.toString() ?? "—"} />
                 <Stat label="Stop" value={trade.stopPrice?.toString() ?? "—"} />
-                <Stat label="Salida" value={trade.exitPrice?.toString() ?? "—"} />
-                <Stat label="Tamaño" value={trade.size?.toString() ?? "—"} />
+                <Stat label="Take Profit" value={trade.takeProfitPrice?.toString() ?? "—"} />
+                <Stat
+                  label="Importancia"
+                  value={trade.importance ? IMPORTANCE_LABELS[trade.importance] : "—"}
+                />
               </div>
 
               <div
@@ -61,16 +76,6 @@ export function TradeDetailSheet() {
                   <p className="text-ink">{trade.session ?? "—"}</p>
                 </div>
               </div>
-
-              {trade.tags.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {trade.tags.map((tag) => (
-                    <Badge key={tag} variant="outline">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              ) : null}
 
               <Separator />
 

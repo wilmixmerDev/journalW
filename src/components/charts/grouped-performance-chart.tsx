@@ -2,7 +2,7 @@
 
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { GroupedPerformance } from "@/lib/metrics";
-import { formatCurrencyCompact, formatSignedCurrency } from "@/lib/format";
+import { formatSignedPercent } from "@/lib/format";
 
 interface GroupedPerformanceChartProps {
   data: GroupedPerformance[];
@@ -24,7 +24,7 @@ export function GroupedPerformanceChart({ data }: GroupedPerformanceChartProps) 
           interval={0}
         />
         <YAxis
-          tickFormatter={(v) => formatCurrencyCompact(v)}
+          tickFormatter={(v) => formatSignedPercent(v)}
           tick={{ fontSize: 11, fill: "var(--ink-3)" }}
           axisLine={false}
           tickLine={false}
@@ -37,7 +37,7 @@ export function GroupedPerformanceChart({ data }: GroupedPerformanceChartProps) 
             borderRadius: 8,
             fontSize: 12,
           }}
-          formatter={(value) => [formatSignedCurrency(Number(value)), "P&L"]}
+          formatter={(value) => [formatSignedPercent(Number(value)), "P&L"]}
         />
         <Bar dataKey="netPnl" radius={[4, 4, 0, 0]}>
           {data.map((group) => (

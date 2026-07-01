@@ -13,7 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useJournalTrades } from "@/hooks/use-journal-trades";
 import { useUIStore } from "@/store/ui-store";
-import { formatDate, formatR, formatSignedCurrency } from "@/lib/format";
+import { formatDate, formatR, formatSignedPercent } from "@/lib/format";
 import type { Trade } from "@/types/trade";
 
 interface TradesClientProps {
@@ -42,7 +42,7 @@ export function TradesClient({ live, backtest }: TradesClientProps) {
       case "losses":
         return trades.filter((t) => (t.pnl ?? 0) < 0);
       case "a-plus":
-        return trades.filter((t) => t.tags.includes("A+ Setup"));
+        return trades.filter((t) => t.importance === "a_plus");
       default:
         return trades;
     }
@@ -104,7 +104,7 @@ export function TradesClient({ live, backtest }: TradesClientProps) {
                     <TableCell className="font-medium text-ink">
                       <div className="flex items-center gap-2">
                         {trade.instrument}
-                        {trade.tags.includes("A+ Setup") ? (
+                        {trade.importance === "a_plus" ? (
                           <Badge variant="outline" className="text-gold">
                             A+
                           </Badge>
@@ -122,7 +122,7 @@ export function TradesClient({ live, backtest }: TradesClientProps) {
                       {formatR(trade.rMultiple ?? 0)}
                     </TableCell>
                     <TableCell className={cn("text-right font-mono", win ? "text-pos" : "text-neg")}>
-                      {formatSignedCurrency(trade.pnl ?? 0)}
+                      {formatSignedPercent(trade.pnl ?? 0)}
                     </TableCell>
                   </TableRow>
                 );

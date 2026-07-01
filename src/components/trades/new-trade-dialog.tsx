@@ -25,20 +25,42 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 const MARKETS = ["Forex", "Cripto", "Índices", "Acciones", "Materias primas", "Futuros"];
 const SESSIONS = ["Asia", "Londres", "Nueva York", "Solapamiento Londres-NY"];
+const IMPORTANCE_LEVELS = [
+  { value: "a_plus", label: "A+" },
+  { value: "media", label: "Media" },
+  { value: "baja", label: "Baja" },
+] as const;
+
+const INSTRUMENTS_BY_MARKET: Record<string, string[]> = {
+  Forex: ["EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF", "AUD/USD", "USD/CAD", "NZD/USD", "EUR/GBP", "EUR/JPY", "GBP/JPY"],
+  Cripto: ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD", "BNB/USD", "ADA/USD", "DOGE/USD"],
+  Índices: ["NAS100", "US30", "SPX500", "GER40", "UK100", "JPN225"],
+  Acciones: ["AAPL", "TSLA", "MSFT", "NVDA", "AMZN", "GOOGL", "META"],
+  "Materias primas": ["XAU/USD", "XAG/USD", "WTI", "NATGAS"],
+  Futuros: ["ES", "NQ", "CL", "GC", "ZB"],
+};
+const ALL_INSTRUMENTS = Object.values(INSTRUMENTS_BY_MARKET).flat();
+
+const optionalNumber = z.preprocess(
+  (v) => (v === "" || v === undefined || v === null ? undefined : Number(v)),
+  z.number().optional()
+);
 
 const schema = z.object({
   instrument: z.string().min(1, "Requerido"),
   market: z.string().min(1, "Requerido"),
   direction: z.enum(["long", "short"]),
-  entryPrice: z.coerce.number({ message: "Requerido" }),
-  stopPrice: z.coerce.number({ message: "Requerido" }),
-  exitPrice: z.coerce.number({ message: "Requerido" }),
-  size: z.coerce.number().positive("Debe ser mayor a 0"),
+  entryPrice: optionalNumber,
+  stopPrice: optionalNumber,
+  takeProfitPrice: optionalNumber,
+  riskPercent: z.coerce.number().positive("Debe ser mayor a 0"),
+  resultType: z.enum(["tp", "sl"], { message: "Requerido" }),
+  rMultiple: z.coerce.number({ message: "Requerido" }),
   enteredAt: z.string().min(1, "Requerido"),
   exitedAt: z.string().min(1, "Requerido"),
   strategy: z.string().optional(),
   session: z.string().optional(),
-  tags: z.string().optional(),
+  importance: z.enum(["a_plus", "media", "baja"]).optional(),
   followedPlan: z.boolean(),
   notes: z.string().optional(),
 });
@@ -46,12 +68,7 @@ const schema = z.object({
 type FormValues = z.input<typeof schema>;
 
 function computeOutcome(values: z.output<typeof schema>) {
-  const { direction, entryPrice, stopPrice, exitPrice, size } = values;
-  const risk = Math.abs(entryPrice - stopPrice);
-  const reward = direction === "long" ? exitPrice - entryPrice : entryPrice - exitPrice;
-  const pnl = reward * size;
-  const rMultiple = risk > 0 ? reward / risk : 0;
-  return { pnl, rMultiple };
+  return { pnl: Math.round(values.riskPercent * values.rMultiple * 100) / 100 };
 }
 
 export function NewTradeDialog() {
@@ -81,7 +98,12 @@ export function NewTradeDialog() {
   const direction = watch("direction");
   const followedPlan = watch("followedPlan");
   const market = watch("market");
+  const instrument = watch("instrument");
   const session = watch("session");
+  const resultType = watch("resultType");
+  const importance = watch("importance");
+
+  const instrumentOptions = market ? INSTRUMENTS_BY_MARKET[market] ?? [] : ALL_INSTRUMENTS;
 
   function onOpenChange(open: boolean) {
     if (!open) {
@@ -91,12 +113,21 @@ export function NewTradeDialog() {
     }
   }
 
+  function onMarketChange(value: string) {
+    setValue("market", value, { shouldValidate: true });
+    setValue("instrument", "", { shouldValidate: true });
+  }
+
+  function onResultTypeChange(value: "tp" | "sl") {
+    setValue("resultType", value, { shouldValidate: true });
+    if (value === "sl") {
+      setValue("rMultiple", -1, { shouldValidate: true });
+    }
+  }
+
   function onSubmit(raw: FormValues) {
     const values = schema.parse(raw);
-    const { pnl, rMultiple } = computeOutcome(values);
-    const tags = values.tags
-      ? values.tags.split(",").map((t) => t.trim()).filter(Boolean)
-      : [];
+    const { pnl } = computeOutcome(values);
 
     startTransition(async () => {
       const result = await createTrade({
@@ -105,18 +136,19 @@ export function NewTradeDialog() {
         instrument: values.instrument,
         market: values.market,
         direction: values.direction,
-        entryPrice: values.entryPrice,
-        stopPrice: values.stopPrice,
-        exitPrice: values.exitPrice,
-        size: values.size,
+        entryPrice: values.entryPrice ?? null,
+        stopPrice: values.stopPrice ?? null,
+        takeProfitPrice: values.takeProfitPrice ?? null,
+        riskPercent: values.riskPercent,
+        resultType: values.resultType,
+        importance: values.importance ?? null,
         enteredAt: new Date(values.enteredAt).toISOString(),
         exitedAt: new Date(values.exitedAt).toISOString(),
         strategy: values.strategy ?? null,
         session: values.session ?? null,
-        tags,
         screenshots: [],
         pnl,
-        rMultiple,
+        rMultiple: values.rMultiple,
         followedPlan: values.followedPlan,
         notes: values.notes ?? null,
       });
@@ -151,17 +183,8 @@ export function NewTradeDialog() {
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="instrument">Instrumento</Label>
-              <Input id="instrument" placeholder="EUR/USD" {...register("instrument")} />
-              {errors.instrument ? <FieldError message={errors.instrument.message} /> : null}
-            </div>
-
-            <div className="space-y-1.5">
               <Label>Mercado</Label>
-              <Select
-                value={market}
-                onValueChange={(v) => v && setValue("market", v, { shouldValidate: true })}
-              >
+              <Select value={market ?? ""} onValueChange={(v) => v && onMarketChange(v)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecciona" />
                 </SelectTrigger>
@@ -174,6 +197,26 @@ export function NewTradeDialog() {
                 </SelectContent>
               </Select>
               {errors.market ? <FieldError message={errors.market.message} /> : null}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Instrumento</Label>
+              <Select
+                value={instrument ?? ""}
+                onValueChange={(v) => v && setValue("instrument", v, { shouldValidate: true })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  {instrumentOptions.map((symbol) => (
+                    <SelectItem key={symbol} value={symbol}>
+                      {symbol}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.instrument ? <FieldError message={errors.instrument.message} /> : null}
             </div>
           </div>
 
@@ -199,27 +242,67 @@ export function NewTradeDialog() {
 
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="entryPrice">Entrada</Label>
+              <Label htmlFor="entryPrice">Entrada (opcional)</Label>
               <Input id="entryPrice" type="number" step="any" {...register("entryPrice")} />
               {errors.entryPrice ? <FieldError message={errors.entryPrice.message} /> : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="stopPrice">Stop</Label>
+              <Label htmlFor="stopPrice">Stop Loss (opcional)</Label>
               <Input id="stopPrice" type="number" step="any" {...register("stopPrice")} />
               {errors.stopPrice ? <FieldError message={errors.stopPrice.message} /> : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="exitPrice">Salida</Label>
-              <Input id="exitPrice" type="number" step="any" {...register("exitPrice")} />
-              {errors.exitPrice ? <FieldError message={errors.exitPrice.message} /> : null}
+              <Label htmlFor="takeProfitPrice">Take Profit (opcional)</Label>
+              <Input id="takeProfitPrice" type="number" step="any" {...register("takeProfitPrice")} />
+              {errors.takeProfitPrice ? <FieldError message={errors.takeProfitPrice.message} /> : null}
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="size">Tamaño</Label>
-              <Input id="size" type="number" step="any" {...register("size")} />
-              {errors.size ? <FieldError message={errors.size.message} /> : null}
+              <Label>Resultado</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={resultType === "tp" ? "default" : "outline"}
+                  onClick={() => onResultTypeChange("tp")}
+                >
+                  Take Profit
+                </Button>
+                <Button
+                  type="button"
+                  variant={resultType === "sl" ? "default" : "outline"}
+                  onClick={() => onResultTypeChange("sl")}
+                >
+                  Stop Loss
+                </Button>
+              </div>
+              {errors.resultType ? <FieldError message={errors.resultType.message} /> : null}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="rMultiple">RR conseguido</Label>
+              <Input
+                id="rMultiple"
+                type="number"
+                step="any"
+                placeholder="3"
+                disabled={resultType === "sl"}
+                className={
+                  resultType === "sl"
+                    ? "bg-ink text-bg disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-ink disabled:text-bg disabled:opacity-100"
+                    : undefined
+                }
+                {...register("rMultiple")}
+              />
+              {errors.rMultiple ? <FieldError message={errors.rMultiple.message} /> : null}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="riskPercent">% de la cuenta arriesgado</Label>
+              <Input id="riskPercent" type="number" step="any" placeholder="0.5" {...register("riskPercent")} />
+              {errors.riskPercent ? <FieldError message={errors.riskPercent.message} /> : null}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="strategy">Estrategia</Label>
@@ -243,7 +326,7 @@ export function NewTradeDialog() {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Sesión</Label>
-              <Select value={session} onValueChange={(v) => setValue("session", v ?? undefined)}>
+              <Select value={session ?? ""} onValueChange={(v) => setValue("session", v ?? undefined)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecciona" />
                 </SelectTrigger>
@@ -257,8 +340,22 @@ export function NewTradeDialog() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="tags">Tags (separados por coma)</Label>
-              <Input id="tags" placeholder="A+ Setup, Scalp" {...register("tags")} />
+              <Label>Importancia</Label>
+              <Select
+                value={importance ?? ""}
+                onValueChange={(v) => setValue("importance", v as "a_plus" | "media" | "baja")}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  {IMPORTANCE_LEVELS.map((level) => (
+                    <SelectItem key={level.value} value={level.value}>
+                      {level.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

@@ -12,6 +12,7 @@
   --font-mono: var(--font-mono);
   --font-heading: var(--font-serif);
 
+  --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-raise: var(--raise);

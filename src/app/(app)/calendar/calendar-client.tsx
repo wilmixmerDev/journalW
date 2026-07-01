@@ -21,7 +21,7 @@ import { MetricCard } from "@/components/shared/metric-card";
 import { cn } from "@/lib/utils";
 import { useJournalTrades } from "@/hooks/use-journal-trades";
 import { computeMetrics } from "@/lib/metrics";
-import { formatCurrencyCompact, formatPercent, formatSignedCurrency } from "@/lib/format";
+import { formatPercent, formatSignedPercent } from "@/lib/format";
 import type { Trade } from "@/types/trade";
 
 interface CalendarClientProps {
@@ -90,7 +90,7 @@ export function CalendarClient({ live, backtest }: CalendarClientProps) {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard
           label="P&L del mes"
-          value={formatSignedCurrency(monthMetrics.netPnl)}
+          value={formatSignedPercent(monthMetrics.netPnl)}
           tone={monthMetrics.netPnl >= 0 ? "pos" : "neg"}
         />
         <MetricCard label="Operaciones" value={String(monthMetrics.totalTrades)} />
@@ -148,7 +148,7 @@ export function CalendarClient({ live, backtest }: CalendarClientProps) {
                           pnl >= 0 ? "text-pos" : "text-neg"
                         )}
                       >
-                        {formatCurrencyCompact(pnl)}
+                        {formatSignedPercent(pnl)}
                       </p>
                       <p className="text-[10px] text-ink-3">{dayTrades.length} op.</p>
                     </div>

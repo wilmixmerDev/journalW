@@ -3,6 +3,8 @@ import type { Database } from "@/types/supabase";
 export type Direction = "long" | "short";
 export type JournalType = "live" | "backtest";
 export type TradeStatus = "open" | "closed";
+export type ResultType = "tp" | "sl";
+export type Importance = "a_plus" | "media" | "baja";
 
 export type TradeRow = Database["public"]["Tables"]["trades"]["Row"];
 export type TradeInsert = Database["public"]["Tables"]["trades"]["Insert"];
@@ -17,13 +19,14 @@ export interface Trade {
   direction: Direction;
   entryPrice: number | null;
   stopPrice: number | null;
-  exitPrice: number | null;
-  size: number | null;
+  takeProfitPrice: number | null;
+  riskPercent: number;
+  resultType: ResultType | null;
+  importance: Importance | null;
   enteredAt: string;
   exitedAt: string | null;
   strategy: string | null;
   session: string | null;
-  tags: string[];
   screenshots: string[];
   pnl: number | null;
   rMultiple: number | null;
@@ -44,13 +47,14 @@ export function tradeFromRow(row: TradeRow): Trade {
     direction: row.direction,
     entryPrice: row.entry_price,
     stopPrice: row.stop_price,
-    exitPrice: row.exit_price,
-    size: row.size,
+    takeProfitPrice: row.take_profit_price,
+    riskPercent: row.risk_percent,
+    resultType: row.result_type,
+    importance: row.importance,
     enteredAt: row.entered_at,
     exitedAt: row.exited_at,
     strategy: row.strategy,
     session: row.session,
-    tags: row.tags,
     screenshots: row.screenshots,
     pnl: row.pnl,
     rMultiple: row.r_multiple,
@@ -71,13 +75,14 @@ export function tradeToInsert(trade: Partial<Trade> & { userId: string }): Trade
     direction: trade.direction!,
     entry_price: trade.entryPrice,
     stop_price: trade.stopPrice,
-    exit_price: trade.exitPrice,
-    size: trade.size,
+    take_profit_price: trade.takeProfitPrice,
+    risk_percent: trade.riskPercent!,
+    result_type: trade.resultType,
+    importance: trade.importance,
     entered_at: trade.enteredAt,
     exited_at: trade.exitedAt,
     strategy: trade.strategy,
     session: trade.session,
-    tags: trade.tags,
     screenshots: trade.screenshots,
     pnl: trade.pnl,
     r_multiple: trade.rMultiple,
