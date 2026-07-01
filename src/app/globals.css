@@ -186,6 +186,14 @@
   }
 }
 
+/* Disable the browser's default cross-fade so only the circular reveal
+   animated from theme-toggle.tsx is visible when switching themes. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
 @layer utilities {
   .scrollbar-thin::-webkit-scrollbar {
     width: 10px;
