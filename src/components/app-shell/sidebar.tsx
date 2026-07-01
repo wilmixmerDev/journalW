@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 import { LayoutDashboard, ListChecks, BarChart3, CalendarDays, Plus, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -56,12 +57,17 @@ export function Sidebar({ email, isDemo }: SidebarProps) {
               key={href}
               href={href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                active
-                  ? "bg-ink text-bg"
-                  : "text-ink-2 hover:bg-surface-2 hover:text-ink"
+                "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                active ? "text-bg" : "text-ink-2 hover:bg-surface-2 hover:text-ink"
               )}
             >
+              {active ? (
+                <motion.span
+                  layoutId="sidebar-active-pill"
+                  className="absolute inset-0 -z-10 rounded-lg bg-ink"
+                  transition={{ type: "spring", duration: 0.4, bounce: 0.15 }}
+                />
+              ) : null}
               <Icon className="size-4" />
               {label}
             </Link>
@@ -94,7 +100,7 @@ export function Sidebar({ email, isDemo }: SidebarProps) {
                 variant="destructive"
                 onClick={() => signOut()}
               >
-                <LogOut className="size-4" />
+                <LogOut className="size-4 transition-transform group-focus/dropdown-menu-item:-translate-x-0.5" />
                 Cerrar sesión
               </DropdownMenuItem>
             </DropdownMenuContent>

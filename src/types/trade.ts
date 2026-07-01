@@ -5,7 +5,7 @@ export type JournalType = "live" | "backtest";
 export type TradeStatus = "open" | "closed";
 export type ResultType = "tp" | "sl";
 export type Quality = "a_plus" | "a" | "b" | "c" | "d";
-export type ScreenshotCategory = "before" | "during" | "after";
+export type ScreenshotCategory = "before" | "after";
 
 export interface TradeScreenshot {
   url: string;
@@ -31,7 +31,6 @@ export interface Trade {
   quality: Quality | null;
   setup: string | null;
   timeframe: string | null;
-  exitReason: string | null;
   emotionBefore: string | null;
   emotionAfter: string | null;
   tags: string[];
@@ -66,7 +65,6 @@ export function tradeFromRow(row: TradeRow): Trade {
     quality: row.quality,
     setup: row.setup,
     timeframe: row.timeframe,
-    exitReason: row.exit_reason,
     emotionBefore: row.emotion_before,
     emotionAfter: row.emotion_after,
     tags: row.tags,
@@ -101,7 +99,6 @@ export function tradeToInsert(trade: Partial<Trade> & { userId: string }): Trade
     quality: trade.quality,
     setup: trade.setup,
     timeframe: trade.timeframe,
-    exit_reason: trade.exitReason,
     emotion_before: trade.emotionBefore,
     emotion_after: trade.emotionAfter,
     tags: trade.tags,
@@ -118,13 +115,14 @@ export function tradeToInsert(trade: Partial<Trade> & { userId: string }): Trade
   };
 }
 
-export type TradeOptionKind = "setup" | "strategy" | "tag";
+export type TradeOptionKind = "setup" | "strategy" | "tag" | "timeframe";
 
 export interface TradeOption {
   id: string;
   userId: string;
   journalType: JournalType;
   kind: TradeOptionKind;
+  parent: string;
   name: string;
   createdAt: string;
 }

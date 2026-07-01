@@ -24,7 +24,6 @@ export interface Database {
           quality: "a_plus" | "a" | "b" | "c" | "d" | null;
           setup: string | null;
           timeframe: string | null;
-          exit_reason: string | null;
           emotion_before: string | null;
           emotion_after: string | null;
           tags: string[];
@@ -57,7 +56,6 @@ export interface Database {
           quality?: "a_plus" | "a" | "b" | "c" | "d" | null;
           setup?: string | null;
           timeframe?: string | null;
-          exit_reason?: string | null;
           emotion_before?: string | null;
           emotion_after?: string | null;
           tags?: string[];
@@ -82,7 +80,8 @@ export interface Database {
           id: string;
           user_id: string;
           journal_type: "live" | "backtest";
-          kind: "setup" | "strategy" | "tag";
+          kind: "setup" | "strategy" | "tag" | "timeframe";
+          parent: string;
           name: string;
           created_at: string;
         };
@@ -90,7 +89,8 @@ export interface Database {
           id?: string;
           user_id: string;
           journal_type: "live" | "backtest";
-          kind: "setup" | "strategy" | "tag";
+          kind: "setup" | "strategy" | "tag" | "timeframe";
+          parent?: string;
           name: string;
           created_at?: string;
         };

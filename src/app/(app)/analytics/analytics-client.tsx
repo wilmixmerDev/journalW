@@ -23,7 +23,6 @@ import {
   computeMetrics,
   performanceByEmotionAfter,
   performanceByEmotionBefore,
-  performanceByExitReason,
   performanceByQuality,
   performanceBySession,
   performanceBySetup,
@@ -50,7 +49,6 @@ const CATEGORIES = [
   { value: "quality", label: "Calidad de ejecución", build: performanceByQuality },
   { value: "emotionBefore", label: "Estado emocional antes", build: performanceByEmotionBefore },
   { value: "emotionAfter", label: "Estado emocional después", build: performanceByEmotionAfter },
-  { value: "exitReason", label: "Motivo de salida", build: performanceByExitReason },
   { value: "tag", label: "Etiquetas", build: performanceByTag },
 ] as const satisfies { value: string; label: string; build: (trades: Trade[]) => GroupedPerformance[] }[];
 

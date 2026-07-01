@@ -28,7 +28,7 @@ const INSTRUMENTS: { symbol: string; market: string }[] = [
   { symbol: "NQ", market: "Futuros" },
 ];
 
-const STRATEGIES = ["ICT", "SMC", "Wyckoff", "Price Action", "Order Flow"];
+const STRATEGIES = ["ICT", "Wyckoff", "Price Action", "Order Flow"];
 
 const SETUPS = ["Liquidity Sweep", "Order Block", "FVG Retest", "Breaker Block", "Reversión en soporte"];
 
@@ -37,16 +37,6 @@ const SESSIONS = ["Asia", "Londres", "Nueva York", "Solapamiento Londres-NY"];
 const QUALITY_LEVELS: Quality[] = ["a_plus", "a", "b", "c", "d"];
 
 const TIMEFRAMES = ["1m", "3m", "5m", "15m", "1H", "4H", "Diario"];
-
-const EXIT_REASONS = [
-  "Take Profit",
-  "Stop Loss",
-  "Break Even",
-  "Trailing Stop",
-  "Cierre manual",
-  "Parcial + Break Even",
-  "Salida anticipada",
-];
 
 const EMOTIONS_BEFORE = ["Tranquilo", "Seguro", "Ansioso", "FOMO", "Impaciente", "Cansado"];
 const EMOTIONS_AFTER = ["Feliz", "Neutral", "Frustrado", "Molesto", "Decepcionado"];
@@ -118,7 +108,6 @@ export function generateMockTrades({
         : entryPrice - stopDistance * Math.abs(rMultiple);
 
     const disciplineChecklist = pickChecklist(rng);
-    const exitReason = win ? "Take Profit" : pick(rng, EXIT_REASONS);
 
     trades.push({
       id: `mock-${journalType}-${i}`,
@@ -136,7 +125,6 @@ export function generateMockTrades({
       quality: pick(rng, QUALITY_LEVELS),
       setup: pick(rng, SETUPS),
       timeframe: pick(rng, TIMEFRAMES),
-      exitReason,
       emotionBefore: pick(rng, EMOTIONS_BEFORE),
       emotionAfter: pick(rng, EMOTIONS_AFTER),
       tags: pickTags(rng),

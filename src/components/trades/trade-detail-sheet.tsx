@@ -20,7 +20,6 @@ const QUALITY_LABELS: Record<Quality, string> = {
 
 const SCREENSHOT_CATEGORIES: { value: ScreenshotCategory; label: string }[] = [
   { value: "before", label: "Antes de entrar" },
-  { value: "during", label: "Durante la operación" },
   { value: "after", label: "Después del cierre" },
 ];
 
@@ -99,10 +98,6 @@ export function TradeDetailSheet() {
                 <div>
                   <p className="text-xs text-ink-3">Timeframe</p>
                   <p className="text-ink">{trade.timeframe ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-ink-3">Motivo de salida</p>
-                  <p className="text-ink">{trade.exitReason ?? "—"}</p>
                 </div>
               </div>
 

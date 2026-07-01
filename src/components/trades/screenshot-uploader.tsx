@@ -10,9 +10,35 @@ import type { ScreenshotCategory, TradeScreenshot } from "@/types/trade";
 
 const CATEGORIES: { value: ScreenshotCategory; label: string }[] = [
   { value: "before", label: "Antes de entrar" },
-  { value: "during", label: "Durante la operación" },
   { value: "after", label: "Después del cierre" },
 ];
+
+const MAX_WIDTH = 1600;
+const JPEG_QUALITY = 0.82;
+
+/** Resizes and re-encodes an image client-side so uploads stay light on free-tier storage. */
+async function compressImage(file: File): Promise<Blob> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_WIDTH / bitmap.width);
+    const width = Math.round(bitmap.width * scale);
+    const height = Math.round(bitmap.height * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY)
+    );
+    return blob ?? file;
+  } catch {
+    return file;
+  }
+}
 
 interface ScreenshotUploaderProps {
   value: TradeScreenshot[];
@@ -24,7 +50,6 @@ export function ScreenshotUploader({ value, onChange }: ScreenshotUploaderProps)
   const [uploadingCategory, setUploadingCategory] = useState<ScreenshotCategory | null>(null);
   const inputRefs = useRef<Record<ScreenshotCategory, HTMLInputElement | null>>({
     before: null,
-    during: null,
     after: null,
   });
 
@@ -49,8 +74,11 @@ export function ScreenshotUploader({ value, onChange }: ScreenshotUploaderProps)
 
       const uploaded: TradeScreenshot[] = [];
       for (const file of Array.from(files)) {
-        const path = `${user.id}/${crypto.randomUUID()}-${category}-${file.name}`;
-        const { error } = await supabase.storage.from("trade-screenshots").upload(path, file);
+        const compressed = await compressImage(file);
+        const path = `${user.id}/${crypto.randomUUID()}-${category}.jpg`;
+        const { error } = await supabase.storage
+          .from("trade-screenshots")
+          .upload(path, compressed, { contentType: "image/jpeg" });
         if (error) {
           toast.error(`No se pudo subir ${file.name}: ${error.message}`);
           continue;
@@ -74,7 +102,7 @@ export function ScreenshotUploader({ value, onChange }: ScreenshotUploaderProps)
   return (
     <div className="space-y-3">
       <Label>Capturas</Label>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {CATEGORIES.map((cat) => {
           const shots = value.filter((s) => s.category === cat.value);
           return (

@@ -258,10 +258,6 @@ export function performanceByTimeframe(trades: Trade[]): GroupedPerformance[] {
   return groupBy(trades, (t) => t.timeframe ?? "Sin timeframe");
 }
 
-export function performanceByExitReason(trades: Trade[]): GroupedPerformance[] {
-  return groupBy(trades, (t) => t.exitReason ?? "Sin especificar");
-}
-
 export function performanceByEmotionBefore(trades: Trade[]): GroupedPerformance[] {
   return groupBy(trades, (t) => t.emotionBefore ?? "Sin registrar");
 }

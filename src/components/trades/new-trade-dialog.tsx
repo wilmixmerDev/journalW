@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -20,9 +21,10 @@ import {
 } from "@/components/ui/select";
 import { CreatableSelect, CreatableMultiSelect } from "@/components/ui/creatable-select";
 import { ScreenshotUploader } from "@/components/trades/screenshot-uploader";
+import { useAnimatedNumber } from "@/hooks/use-animated-number";
 import { useUIStore } from "@/store/ui-store";
 import { useJournalStore } from "@/store/journal-store";
-import { createTrade, createTradeOption, getTradeOptions } from "@/app/(app)/actions";
+import { createTrade, createTradeOption, getTradeOptions, type TradeOptionLists } from "@/app/(app)/actions";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { DISCIPLINE_ITEMS, computeDisciplineScore } from "@/lib/discipline";
 import type { TradeScreenshot } from "@/types/trade";
@@ -36,16 +38,7 @@ const QUALITY_LEVELS = [
   { value: "c", label: "C (Regular)" },
   { value: "d", label: "D (Mala)" },
 ] as const;
-const TIMEFRAMES = ["1m", "3m", "5m", "15m", "1H", "4H", "Diario"];
-const EXIT_REASONS = [
-  "Take Profit",
-  "Stop Loss",
-  "Break Even",
-  "Trailing Stop",
-  "Cierre manual",
-  "Parcial + Break Even",
-  "Salida anticipada",
-];
+const TIMEFRAME_SUGGESTIONS = ["1m", "3m", "5m", "15m", "1H", "4H", "Diario"];
 const EMOTIONS_BEFORE = ["Tranquilo", "Seguro", "Ansioso", "FOMO", "Impaciente", "Cansado"];
 const EMOTIONS_AFTER = ["Feliz", "Neutral", "Frustrado", "Molesto", "Decepcionado"];
 const TAG_SUGGESTIONS = [
@@ -77,7 +70,7 @@ const optionalNumber = z.preprocess(
 
 const screenshotSchema = z.object({
   url: z.string(),
-  category: z.enum(["before", "during", "after"]),
+  category: z.enum(["before", "after"]),
 });
 
 const schema = z.object({
@@ -93,7 +86,6 @@ const schema = z.object({
   quality: z.enum(["a_plus", "a", "b", "c", "d"]).optional(),
   setup: z.string().optional(),
   timeframe: z.string().optional(),
-  exitReason: z.string().optional(),
   emotionBefore: z.string().optional(),
   emotionAfter: z.string().optional(),
   tags: z.array(z.string()),
@@ -112,13 +104,16 @@ function computeOutcome(values: z.output<typeof schema>) {
   return { pnl: Math.round(values.riskPercent * values.rMultiple * 100) / 100 };
 }
 
-interface OptionLists {
-  setup: string[];
-  strategy: string[];
-  tag: string[];
-}
+const EMPTY_OPTIONS: TradeOptionLists = { strategy: [], setupsByStrategy: {}, timeframe: [], tag: [] };
 
-const EMPTY_OPTIONS: OptionLists = { setup: [], strategy: [], tag: [] };
+const STEPS: { label: string; fields: FieldPath<FormValues>[] }[] = [
+  { label: "Instrumento", fields: ["market", "instrument"] },
+  { label: "Resultado", fields: ["riskPercent", "resultType", "rMultiple"] },
+  { label: "Contexto", fields: ["enteredAt", "exitedAt"] },
+  { label: "Psicología", fields: [] },
+  { label: "Capturas", fields: [] },
+  { label: "Disciplina y notas", fields: [] },
+];
 
 export function NewTradeDialog() {
   const isOpen = useUIStore((s) => s.isNewTradeOpen);
@@ -126,12 +121,15 @@ export function NewTradeDialog() {
   const journalType = useJournalStore((s) => s.journalType);
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
-  const [options, setOptions] = useState<OptionLists>(EMPTY_OPTIONS);
+  const [options, setOptions] = useState<TradeOptionLists>(EMPTY_OPTIONS);
+  const [step, setStep] = useState(0);
+  const [justAdvanced, setJustAdvanced] = useState(false);
 
   const {
     register,
     handleSubmit,
     reset,
+    trigger,
     watch,
     setValue,
     formState: { errors },
@@ -161,7 +159,6 @@ export function NewTradeDialog() {
   const setup = watch("setup");
   const strategy = watch("strategy");
   const timeframe = watch("timeframe");
-  const exitReason = watch("exitReason");
   const emotionBefore = watch("emotionBefore");
   const emotionAfter = watch("emotionAfter");
   const tags = watch("tags");
@@ -169,20 +166,56 @@ export function NewTradeDialog() {
   const disciplineChecklist = watch("disciplineChecklist");
 
   const instrumentOptions = market ? INSTRUMENTS_BY_MARKET[market] ?? [] : ALL_INSTRUMENTS;
+  const setupOptions = strategy
+    ? options.setupsByStrategy[strategy] ?? []
+    : Array.from(new Set(Object.values(options.setupsByStrategy).flat()));
+  const timeframeOptions = Array.from(new Set([...TIMEFRAME_SUGGESTIONS, ...options.timeframe]));
   const tagOptions = Array.from(new Set([...TAG_SUGGESTIONS, ...options.tag]));
   const disciplineScore = computeDisciplineScore(disciplineChecklist ?? []);
+  const animatedDisciplineScore = useAnimatedNumber(disciplineScore);
+
+  const isLastStep = step === STEPS.length - 1;
 
   function onOpenChange(open: boolean) {
     if (!open) {
       close();
       reset();
       setServerError(null);
+      setStep(0);
+      setJustAdvanced(false);
     }
+  }
+
+  function cooldownAfterStepChange() {
+    // Guards against a rapid double-click landing on whichever button re-renders
+    // in the same spot (e.g. "Siguiente" turning into "Guardar operación").
+    setJustAdvanced(true);
+    setTimeout(() => setJustAdvanced(false), 400);
+  }
+
+  async function goNext() {
+    if (justAdvanced) return;
+    const valid = await trigger(STEPS[step].fields);
+    if (valid) {
+      setStep((s) => Math.min(s + 1, STEPS.length - 1));
+      cooldownAfterStepChange();
+    }
+  }
+
+  function goBack() {
+    if (justAdvanced) return;
+    setStep((s) => Math.max(s - 1, 0));
+    cooldownAfterStepChange();
   }
 
   function onMarketChange(value: string) {
     setValue("market", value, { shouldValidate: true });
     setValue("instrument", "", { shouldValidate: true });
+  }
+
+  function onStrategyChange(value: string) {
+    setValue("strategy", value, { shouldValidate: true });
+    setValue("setup", "", { shouldValidate: true });
   }
 
   function onResultTypeChange(value: "tp" | "sl") {
@@ -192,12 +225,27 @@ export function NewTradeDialog() {
     }
   }
 
-  function persistOption(kind: "setup" | "strategy" | "tag", name: string) {
-    setOptions((prev) => ({
+  function persistOption(kind: "strategy" | "timeframe" | "tag", name: string) {
+    setOptions((prev: TradeOptionLists) => ({
       ...prev,
       [kind]: prev[kind].includes(name) ? prev[kind] : [...prev[kind], name],
     }));
     void createTradeOption(journalType, kind, name);
+  }
+
+  function persistSetupOption(name: string) {
+    const parent = strategy ?? "";
+    setOptions((prev: TradeOptionLists) => {
+      const bucket = prev.setupsByStrategy[parent] ?? [];
+      return {
+        ...prev,
+        setupsByStrategy: {
+          ...prev.setupsByStrategy,
+          [parent]: bucket.includes(name) ? bucket : [...bucket, name],
+        },
+      };
+    });
+    void createTradeOption(journalType, "setup", name, parent);
   }
 
   function toggleDisciplineItem(id: string, checked: boolean) {
@@ -227,7 +275,6 @@ export function NewTradeDialog() {
         quality: values.quality ?? null,
         setup: values.setup || null,
         timeframe: values.timeframe || null,
-        exitReason: values.exitReason || null,
         emotionBefore: values.emotionBefore || null,
         emotionAfter: values.emotionAfter || null,
         tags: values.tags,
@@ -257,12 +304,22 @@ export function NewTradeDialog() {
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange} disablePointerDismissal>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Nueva operación</DialogTitle>
           <DialogDescription>Registra los detalles de tu operación cerrada.</DialogDescription>
         </DialogHeader>
+
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-ink-2">
+            <span>
+              Paso {step + 1} de {STEPS.length}: {STEPS[step].label}
+            </span>
+            <span className="font-mono">{Math.round(((step + 1) / STEPS.length) * 100)}%</span>
+          </div>
+          <Progress value={((step + 1) / STEPS.length) * 100} />
+        </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {serverError ? (
@@ -271,313 +328,324 @@ export function NewTradeDialog() {
             </p>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Mercado</Label>
-              <Select value={market ?? ""} onValueChange={(v) => v && onMarketChange(v)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecciona" />
-                </SelectTrigger>
-                <SelectContent>
-                  {MARKETS.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.market ? <FieldError message={errors.market.message} /> : null}
-            </div>
+          {step === 0 ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Mercado</Label>
+                  <Select value={market ?? ""} onValueChange={(v) => v && onMarketChange(v)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecciona" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MARKETS.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.market ? <FieldError message={errors.market.message} /> : null}
+                </div>
 
-            <div className="space-y-1.5">
-              <Label>Instrumento</Label>
-              <Select
-                value={instrument ?? ""}
-                onValueChange={(v) => v && setValue("instrument", v, { shouldValidate: true })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecciona" />
-                </SelectTrigger>
-                <SelectContent>
-                  {instrumentOptions.map((symbol) => (
-                    <SelectItem key={symbol} value={symbol}>
-                      {symbol}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.instrument ? <FieldError message={errors.instrument.message} /> : null}
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Dirección</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant={direction === "long" ? "default" : "outline"}
-                onClick={() => setValue("direction", "long")}
-              >
-                Long
-              </Button>
-              <Button
-                type="button"
-                variant={direction === "short" ? "default" : "outline"}
-                onClick={() => setValue("direction", "short")}
-              >
-                Short
-              </Button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="entryPrice">Entrada (opcional)</Label>
-              <Input id="entryPrice" type="number" step="any" {...register("entryPrice")} />
-              {errors.entryPrice ? <FieldError message={errors.entryPrice.message} /> : null}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="stopPrice">Stop Loss (opcional)</Label>
-              <Input id="stopPrice" type="number" step="any" {...register("stopPrice")} />
-              {errors.stopPrice ? <FieldError message={errors.stopPrice.message} /> : null}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="takeProfitPrice">Take Profit (opcional)</Label>
-              <Input id="takeProfitPrice" type="number" step="any" {...register("takeProfitPrice")} />
-              {errors.takeProfitPrice ? <FieldError message={errors.takeProfitPrice.message} /> : null}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Resultado</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant={resultType === "tp" ? "default" : "outline"}
-                  onClick={() => onResultTypeChange("tp")}
-                >
-                  Take Profit
-                </Button>
-                <Button
-                  type="button"
-                  variant={resultType === "sl" ? "default" : "outline"}
-                  onClick={() => onResultTypeChange("sl")}
-                >
-                  Stop Loss
-                </Button>
+                <div className="space-y-1.5">
+                  <Label>Instrumento</Label>
+                  <Select
+                    value={instrument ?? ""}
+                    onValueChange={(v) => v && setValue("instrument", v, { shouldValidate: true })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecciona" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {instrumentOptions.map((symbol) => (
+                        <SelectItem key={symbol} value={symbol}>
+                          {symbol}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.instrument ? <FieldError message={errors.instrument.message} /> : null}
+                </div>
               </div>
-              {errors.resultType ? <FieldError message={errors.resultType.message} /> : null}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="rMultiple">RR conseguido</Label>
-              <Input
-                id="rMultiple"
-                type="number"
-                step="any"
-                placeholder="3"
-                disabled={resultType === "sl"}
-                className={
-                  resultType === "sl"
-                    ? "bg-ink text-bg disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-ink disabled:text-bg disabled:opacity-100"
-                    : undefined
-                }
-                {...register("rMultiple")}
-              />
-              {errors.rMultiple ? <FieldError message={errors.rMultiple.message} /> : null}
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="riskPercent">% de la cuenta arriesgado</Label>
-              <Input id="riskPercent" type="number" step="any" placeholder="0.5" {...register("riskPercent")} />
-              {errors.riskPercent ? <FieldError message={errors.riskPercent.message} /> : null}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Calidad de la ejecución</Label>
-              <Select
-                value={quality ?? ""}
-                onValueChange={(v) => setValue("quality", v as FormValues["quality"])}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecciona" />
-                </SelectTrigger>
-                <SelectContent>
-                  {QUALITY_LEVELS.map((level) => (
-                    <SelectItem key={level.value} value={level.value}>
-                      {level.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+              <div className="space-y-1.5">
+                <Label>Dirección</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={direction === "long" ? "default" : "outline"}
+                    onClick={() => setValue("direction", "long")}
+                  >
+                    Long
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={direction === "short" ? "default" : "outline"}
+                    onClick={() => setValue("direction", "short")}
+                  >
+                    Short
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : null}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Setup</Label>
-              <CreatableSelect
-                value={setup ?? ""}
-                onValueChange={(v) => setValue("setup", v)}
-                options={options.setup}
-                onCreate={(name) => persistOption("setup", name)}
-                placeholder="Liquidity Sweep"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Estrategia</Label>
-              <CreatableSelect
-                value={strategy ?? ""}
-                onValueChange={(v) => setValue("strategy", v)}
-                options={options.strategy}
-                onCreate={(name) => persistOption("strategy", name)}
-                placeholder="ICT, SMC, Wyckoff..."
-              />
-            </div>
-          </div>
+          {step === 1 ? (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="entryPrice">Entrada (opcional)</Label>
+                  <Input id="entryPrice" type="number" step="any" {...register("entryPrice")} />
+                  {errors.entryPrice ? <FieldError message={errors.entryPrice.message} /> : null}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="stopPrice">Stop Loss (opcional)</Label>
+                  <Input id="stopPrice" type="number" step="any" {...register("stopPrice")} />
+                  {errors.stopPrice ? <FieldError message={errors.stopPrice.message} /> : null}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="takeProfitPrice">Take Profit (opcional)</Label>
+                  <Input id="takeProfitPrice" type="number" step="any" {...register("takeProfitPrice")} />
+                  {errors.takeProfitPrice ? <FieldError message={errors.takeProfitPrice.message} /> : null}
+                </div>
+              </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Timeframe</Label>
-              <Select value={timeframe ?? ""} onValueChange={(v) => setValue("timeframe", v ?? undefined)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecciona" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIMEFRAMES.map((tf) => (
-                    <SelectItem key={tf} value={tf}>
-                      {tf}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Motivo de salida</Label>
-              <Select value={exitReason ?? ""} onValueChange={(v) => setValue("exitReason", v ?? undefined)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecciona" />
-                </SelectTrigger>
-                <SelectContent>
-                  {EXIT_REASONS.map((reason) => (
-                    <SelectItem key={reason} value={reason}>
-                      {reason}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="enteredAt">Entrada (fecha y hora)</Label>
-              <Input id="enteredAt" type="datetime-local" {...register("enteredAt")} />
-              {errors.enteredAt ? <FieldError message={errors.enteredAt.message} /> : null}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="exitedAt">Salida (fecha y hora)</Label>
-              <Input id="exitedAt" type="datetime-local" {...register("exitedAt")} />
-              {errors.exitedAt ? <FieldError message={errors.exitedAt.message} /> : null}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Sesión</Label>
-              <Select value={session ?? ""} onValueChange={(v) => setValue("session", v ?? undefined)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecciona" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SESSIONS.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Estado emocional antes</Label>
-              <Select value={emotionBefore ?? ""} onValueChange={(v) => setValue("emotionBefore", v ?? undefined)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecciona" />
-                </SelectTrigger>
-                <SelectContent>
-                  {EMOTIONS_BEFORE.map((e) => (
-                    <SelectItem key={e} value={e}>
-                      {e}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Estado emocional después</Label>
-            <Select value={emotionAfter ?? ""} onValueChange={(v) => setValue("emotionAfter", v ?? undefined)}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecciona" />
-              </SelectTrigger>
-              <SelectContent>
-                {EMOTIONS_AFTER.map((e) => (
-                  <SelectItem key={e} value={e}>
-                    {e}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Etiquetas</Label>
-            <CreatableMultiSelect
-              value={tags ?? []}
-              onValueChange={(v) => setValue("tags", v)}
-              options={tagOptions}
-              onCreate={(name) => persistOption("tag", name)}
-              placeholder="FOMO, Revenge, Liquidez..."
-            />
-          </div>
-
-          <ScreenshotUploader
-            value={screenshots ?? []}
-            onChange={(shots) => setValue("screenshots", shots)}
-          />
-
-          <div className="space-y-1.5">
-            <Label htmlFor="notes">Notas</Label>
-            <Textarea id="notes" rows={3} placeholder="¿Qué funcionó? ¿Qué mejorarías?" {...register("notes")} />
-          </div>
-
-          <div className="space-y-2 rounded-lg border border-line px-3 py-2.5">
-            <div className="flex items-center justify-between">
-              <Label>Checklist de disciplina</Label>
-              <span className="font-mono text-xs text-gold">{disciplineScore}%</span>
-            </div>
-            <div className="space-y-1.5">
-              {DISCIPLINE_ITEMS.map((item) => (
-                <label key={item.id} className="flex items-center gap-2 text-sm text-ink-2">
-                  <Checkbox
-                    checked={(disciplineChecklist ?? []).includes(item.id)}
-                    onCheckedChange={(checked) => toggleDisciplineItem(item.id, checked === true)}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Resultado</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={resultType === "tp" ? "default" : "outline"}
+                      onClick={() => onResultTypeChange("tp")}
+                    >
+                      Take Profit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={resultType === "sl" ? "default" : "outline"}
+                      onClick={() => onResultTypeChange("sl")}
+                    >
+                      Stop Loss
+                    </Button>
+                  </div>
+                  {errors.resultType ? <FieldError message={errors.resultType.message} /> : null}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="rMultiple">RR conseguido</Label>
+                  <Input
+                    id="rMultiple"
+                    type="number"
+                    step="any"
+                    placeholder="3"
+                    disabled={resultType === "sl"}
+                    className={
+                      resultType === "sl"
+                        ? "bg-ink text-bg disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-ink disabled:text-bg disabled:opacity-100"
+                        : undefined
+                    }
+                    {...register("rMultiple")}
                   />
-                  {item.label}
-                </label>
-              ))}
-            </div>
-          </div>
+                  {errors.rMultiple ? <FieldError message={errors.rMultiple.message} /> : null}
+                </div>
+              </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="riskPercent">% de la cuenta arriesgado</Label>
+                  <Input id="riskPercent" type="number" step="any" placeholder="0.5" {...register("riskPercent")} />
+                  {errors.riskPercent ? <FieldError message={errors.riskPercent.message} /> : null}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Calidad de la ejecución</Label>
+                  <Select
+                    value={quality ?? ""}
+                    onValueChange={(v) => setValue("quality", v as FormValues["quality"])}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecciona" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {QUALITY_LEVELS.map((level) => (
+                        <SelectItem key={level.value} value={level.value}>
+                          {level.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          {step === 2 ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Estrategia</Label>
+                  <CreatableSelect
+                    value={strategy ?? ""}
+                    onValueChange={(v) => onStrategyChange(v)}
+                    options={options.strategy}
+                    onCreate={(name) => persistOption("strategy", name)}
+                    placeholder="ICT, Wyckoff, Price Action..."
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Setup</Label>
+                  <CreatableSelect
+                    value={setup ?? ""}
+                    onValueChange={(v) => setValue("setup", v)}
+                    options={setupOptions}
+                    onCreate={(name) => persistSetupOption(name)}
+                    placeholder={strategy ? "Liquidity Sweep" : "Elige una estrategia primero"}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Timeframe</Label>
+                  <CreatableSelect
+                    value={timeframe ?? ""}
+                    onValueChange={(v) => setValue("timeframe", v)}
+                    options={timeframeOptions}
+                    onCreate={(name) => persistOption("timeframe", name)}
+                    placeholder="15m"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Sesión</Label>
+                  <Select value={session ?? ""} onValueChange={(v) => setValue("session", v ?? undefined)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecciona" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SESSIONS.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="enteredAt">Entrada (fecha y hora)</Label>
+                  <Input id="enteredAt" type="datetime-local" {...register("enteredAt")} />
+                  {errors.enteredAt ? <FieldError message={errors.enteredAt.message} /> : null}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="exitedAt">Salida (fecha y hora)</Label>
+                  <Input id="exitedAt" type="datetime-local" {...register("exitedAt")} />
+                  {errors.exitedAt ? <FieldError message={errors.exitedAt.message} /> : null}
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          {step === 3 ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Estado emocional antes</Label>
+                  <Select value={emotionBefore ?? ""} onValueChange={(v) => setValue("emotionBefore", v ?? undefined)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecciona" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EMOTIONS_BEFORE.map((e) => (
+                        <SelectItem key={e} value={e}>
+                          {e}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Estado emocional después</Label>
+                  <Select value={emotionAfter ?? ""} onValueChange={(v) => setValue("emotionAfter", v ?? undefined)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecciona" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EMOTIONS_AFTER.map((e) => (
+                        <SelectItem key={e} value={e}>
+                          {e}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Etiquetas</Label>
+                <CreatableMultiSelect
+                  value={tags ?? []}
+                  onValueChange={(v) => setValue("tags", v)}
+                  options={tagOptions}
+                  onCreate={(name) => persistOption("tag", name)}
+                  placeholder="FOMO, Revenge, Liquidez..."
+                />
+              </div>
+            </>
+          ) : null}
+
+          {step === 4 ? (
+            <ScreenshotUploader
+              value={screenshots ?? []}
+              onChange={(shots) => setValue("screenshots", shots)}
+            />
+          ) : null}
+
+          {step === 5 ? (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor="notes">Notas</Label>
+                <Textarea id="notes" rows={3} placeholder="¿Qué funcionó? ¿Qué mejorarías?" {...register("notes")} />
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-line px-3 py-2.5">
+                <div className="flex items-center justify-between">
+                  <Label>Checklist de disciplina</Label>
+                  <span className="font-mono text-xs text-gold">{Math.round(animatedDisciplineScore)}%</span>
+                </div>
+                <div className="space-y-1.5">
+                  {DISCIPLINE_ITEMS.map((item) => (
+                    <label key={item.id} className="flex items-center gap-2 text-sm text-ink-2">
+                      <Checkbox
+                        checked={(disciplineChecklist ?? []).includes(item.id)}
+                        onCheckedChange={(checked) => toggleDisciplineItem(item.id, checked === true)}
+                      />
+                      {item.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          <div className="flex justify-between gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={step === 0 ? () => onOpenChange(false) : goBack}
+            >
+              {step === 0 ? "Cancelar" : "Atrás"}
             </Button>
-            <Button type="submit" disabled={isPending}>
-              {isPending ? "Guardando..." : "Guardar operación"}
-            </Button>
+            {isLastStep ? (
+              <Button type="submit" disabled={isPending || justAdvanced}>
+                {isPending ? "Guardando..." : "Guardar operación"}
+              </Button>
+            ) : (
+              <Button type="button" onClick={goNext} disabled={justAdvanced}>
+                Siguiente
+              </Button>
+            )}
           </div>
         </form>
       </DialogContent>

@@ -42,33 +42,45 @@ export async function createTrade(input: Omit<Trade, "id" | "userId" | "createdA
 }
 
 export interface TradeOptionLists {
-  setup: string[];
   strategy: string[];
+  setupsByStrategy: Record<string, string[]>;
+  timeframe: string[];
   tag: string[];
 }
 
+const EMPTY_OPTION_LISTS: TradeOptionLists = {
+  strategy: [],
+  setupsByStrategy: {},
+  timeframe: [],
+  tag: [],
+};
+
 export async function getTradeOptions(journalType: JournalType): Promise<TradeOptionLists> {
-  const empty: TradeOptionLists = { setup: [], strategy: [], tag: [] };
-  if (!isSupabaseConfigured()) return empty;
+  if (!isSupabaseConfigured()) return EMPTY_OPTION_LISTS;
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return empty;
+  if (!user) return EMPTY_OPTION_LISTS;
 
   const { data, error } = await supabase
     .from("trade_options")
-    .select("kind, name")
+    .select("kind, name, parent")
     .eq("user_id", user.id)
     .eq("journal_type", journalType)
     .order("name", { ascending: true });
 
-  if (error || !data) return empty;
+  if (error || !data) return EMPTY_OPTION_LISTS;
 
-  const result: TradeOptionLists = { setup: [], strategy: [], tag: [] };
+  const result: TradeOptionLists = { strategy: [], setupsByStrategy: {}, timeframe: [], tag: [] };
   for (const row of data) {
-    result[row.kind as TradeOptionKind].push(row.name);
+    if (row.kind === "setup") {
+      const bucket = result.setupsByStrategy[row.parent] ?? [];
+      result.setupsByStrategy[row.parent] = [...bucket, row.name];
+    } else if (row.kind === "strategy" || row.kind === "timeframe" || row.kind === "tag") {
+      result[row.kind].push(row.name);
+    }
   }
   return result;
 }
@@ -76,7 +88,8 @@ export async function getTradeOptions(journalType: JournalType): Promise<TradeOp
 export async function createTradeOption(
   journalType: JournalType,
   kind: TradeOptionKind,
-  name: string
+  name: string,
+  parent = ""
 ): Promise<{ error: string | null }> {
   const trimmed = name.trim();
   if (!trimmed) return { error: "El nombre no puede estar vacío." };
@@ -91,8 +104,8 @@ export async function createTradeOption(
   const { error } = await supabase
     .from("trade_options")
     .upsert(
-      { user_id: user.id, journal_type: journalType, kind, name: trimmed },
-      { onConflict: "user_id,journal_type,kind,name", ignoreDuplicates: true }
+      { user_id: user.id, journal_type: journalType, kind, parent, name: trimmed },
+      { onConflict: "user_id,journal_type,kind,parent,name", ignoreDuplicates: true }
     );
 
   if (error) return { error: error.message };
