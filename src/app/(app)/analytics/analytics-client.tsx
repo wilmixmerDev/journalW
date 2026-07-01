@@ -1,20 +1,39 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricCard } from "@/components/shared/metric-card";
+import { PerformanceTable } from "@/components/shared/performance-table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EquityCurveChart } from "@/components/charts/equity-curve-chart";
+import { DisciplineCurveChart } from "@/components/charts/discipline-curve-chart";
 import { WinRateDonut } from "@/components/charts/win-rate-donut";
 import { RDistributionChart } from "@/components/charts/r-distribution-chart";
-import { GroupedPerformanceChart } from "@/components/charts/grouped-performance-chart";
 import { useJournalTrades } from "@/hooks/use-journal-trades";
 import {
+  buildDisciplineCurve,
   buildEquityCurve,
   buildRDistribution,
   computeMetrics,
+  performanceByEmotionAfter,
+  performanceByEmotionBefore,
+  performanceByExitReason,
+  performanceByQuality,
   performanceBySession,
+  performanceBySetup,
   performanceByStrategy,
+  performanceByTag,
+  performanceByTimeframe,
   performanceByWeekday,
+  type GroupedPerformance,
 } from "@/lib/metrics";
+import { formatPercent } from "@/lib/format";
 import type { Trade } from "@/types/trade";
 
 interface AnalyticsClientProps {
@@ -22,14 +41,31 @@ interface AnalyticsClientProps {
   backtest: Trade[];
 }
 
+const CATEGORIES = [
+  { value: "strategy", label: "Estrategia", build: performanceByStrategy },
+  { value: "setup", label: "Setup", build: performanceBySetup },
+  { value: "timeframe", label: "Timeframe", build: performanceByTimeframe },
+  { value: "session", label: "Sesión", build: performanceBySession },
+  { value: "weekday", label: "Día de la semana", build: performanceByWeekday },
+  { value: "quality", label: "Calidad de ejecución", build: performanceByQuality },
+  { value: "emotionBefore", label: "Estado emocional antes", build: performanceByEmotionBefore },
+  { value: "emotionAfter", label: "Estado emocional después", build: performanceByEmotionAfter },
+  { value: "exitReason", label: "Motivo de salida", build: performanceByExitReason },
+  { value: "tag", label: "Etiquetas", build: performanceByTag },
+] as const satisfies { value: string; label: string; build: (trades: Trade[]) => GroupedPerformance[] }[];
+
+type CategoryValue = (typeof CATEGORIES)[number]["value"];
+
 export function AnalyticsClient({ live, backtest }: AnalyticsClientProps) {
   const trades = useJournalTrades(live, backtest);
   const metrics = computeMetrics(trades);
   const equityCurve = buildEquityCurve(trades);
+  const disciplineCurve = buildDisciplineCurve(trades);
   const rDistribution = buildRDistribution(trades);
-  const bySession = performanceBySession(trades);
-  const byStrategy = performanceByStrategy(trades);
-  const byWeekday = performanceByWeekday(trades);
+
+  const [category, setCategory] = useState<CategoryValue>("strategy");
+  const activeCategory = CATEGORIES.find((c) => c.value === category) ?? CATEGORIES[0];
+  const categoryData = useMemo(() => activeCategory.build(trades), [activeCategory, trades]);
 
   return (
     <div className="space-y-6 p-4 lg:p-8">
@@ -75,41 +111,52 @@ export function AnalyticsClient({ live, backtest }: AnalyticsClientProps) {
         </Card>
       </div>
 
-      <Card className="border-line bg-surface">
-        <CardHeader>
-          <CardTitle>Distribución de R-Multiple</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <RDistributionChart data={rDistribution} />
-        </CardContent>
-      </Card>
-
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="border-line bg-surface">
+        <Card className="border-line bg-surface lg:col-span-2">
           <CardHeader>
-            <CardTitle>Por sesión</CardTitle>
+            <CardTitle>Distribución de R-Multiple</CardTitle>
           </CardHeader>
           <CardContent>
-            <GroupedPerformanceChart data={bySession} />
+            <RDistributionChart data={rDistribution} />
           </CardContent>
         </Card>
+
         <Card className="border-line bg-surface">
           <CardHeader>
-            <CardTitle>Por estrategia</CardTitle>
+            <CardTitle>Disciplina</CardTitle>
           </CardHeader>
-          <CardContent>
-            <GroupedPerformanceChart data={byStrategy} />
-          </CardContent>
-        </Card>
-        <Card className="border-line bg-surface">
-          <CardHeader>
-            <CardTitle>Por día de la semana</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <GroupedPerformanceChart data={byWeekday} />
+          <CardContent className="space-y-3">
+            <div>
+              <p className="text-xs font-medium text-ink-3">Disciplina promedio</p>
+              <p className="font-mono text-2xl tracking-tight text-gold">
+                {formatPercent(metrics.disciplineScore)}
+              </p>
+            </div>
+            <DisciplineCurveChart data={disciplineCurve} />
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-line bg-surface">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+          <CardTitle>Rendimiento por categoría</CardTitle>
+          <Select value={category} onValueChange={(v) => v && setCategory(v as CategoryValue)}>
+            <SelectTrigger className="w-52">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CATEGORIES.map((c) => (
+                <SelectItem key={c.value} value={c.value}>
+                  {c.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardHeader>
+        <CardContent>
+          <PerformanceTable data={categoryData} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

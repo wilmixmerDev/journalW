@@ -102,7 +102,7 @@ export function DashboardClient({ live, backtest }: DashboardClientProps) {
           <CardContent className="space-y-5">
             <div>
               <div className="mb-1.5 flex items-center justify-between text-sm">
-                <span className="text-ink-2">Plan seguido</span>
+                <span className="text-ink-2">Disciplina promedio</span>
                 <span className="font-mono text-ink">{formatPercent(metrics.disciplineScore)}</span>
               </div>
               <Progress value={metrics.disciplineScore} />

@@ -42,7 +42,7 @@ export function TradesClient({ live, backtest }: TradesClientProps) {
       case "losses":
         return trades.filter((t) => (t.pnl ?? 0) < 0);
       case "a-plus":
-        return trades.filter((t) => t.importance === "a_plus");
+        return trades.filter((t) => t.quality === "a_plus");
       default:
         return trades;
     }
@@ -104,7 +104,7 @@ export function TradesClient({ live, backtest }: TradesClientProps) {
                     <TableCell className="font-medium text-ink">
                       <div className="flex items-center gap-2">
                         {trade.instrument}
-                        {trade.importance === "a_plus" ? (
+                        {trade.quality === "a_plus" ? (
                           <Badge variant="outline" className="text-gold">
                             A+
                           </Badge>

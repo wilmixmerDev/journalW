@@ -1,4 +1,4 @@
-import type { Trade } from "@/types/trade";
+import type { Quality, Trade } from "@/types/trade";
 
 export interface TradeMetrics {
   totalTrades: number;
@@ -55,7 +55,7 @@ export function computeMetrics(trades: Trade[]): TradeMetrics {
   const expectancy = (winRate / 100) * avgWinR - lossRate * Math.abs(avgLossR);
 
   const disciplineScore = totalTrades
-    ? (closed.filter((t) => t.followedPlan).length / totalTrades) * 100
+    ? closed.reduce((sum, t) => sum + t.disciplineScore, 0) / totalTrades
     : 0;
 
   const ordered = [...closed].sort(
@@ -135,6 +135,19 @@ export function buildEquityCurve(trades: Trade[]): EquityPoint[] {
   });
 }
 
+export interface DisciplinePoint {
+  date: string;
+  score: number;
+}
+
+export function buildDisciplineCurve(trades: Trade[]): DisciplinePoint[] {
+  const ordered = [...closedTrades(trades)].sort(
+    (a, b) => new Date(a.enteredAt).getTime() - new Date(b.enteredAt).getTime()
+  );
+
+  return ordered.map((trade) => ({ date: trade.enteredAt, score: trade.disciplineScore }));
+}
+
 export interface RDistributionBucket {
   label: string;
   count: number;
@@ -167,9 +180,38 @@ export function buildRDistribution(trades: Trade[]): RDistributionBucket[] {
 
 export interface GroupedPerformance {
   label: string;
-  netPnl: number;
-  winRate: number;
   trades: number;
+  winRate: number;
+  netPnl: number;
+  profitFactor: number | null;
+  totalR: number;
+  avgR: number;
+  expectancy: number;
+}
+
+function summarizeGroup(group: Trade[]): Omit<GroupedPerformance, "label"> {
+  const totalTrades = group.length;
+  const wins = group.filter((t) => (t.pnl ?? 0) > 0).length;
+  const losses = group.filter((t) => (t.pnl ?? 0) < 0).length;
+  const winRate = totalTrades ? (wins / totalTrades) * 100 : 0;
+
+  const grossProfit = group.reduce((sum, t) => sum + Math.max(t.pnl ?? 0, 0), 0);
+  const grossLoss = Math.abs(group.reduce((sum, t) => sum + Math.min(t.pnl ?? 0, 0), 0));
+  const netPnl = grossProfit - grossLoss;
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : null;
+
+  const rValues = group.map((t) => t.rMultiple ?? 0);
+  const totalR = rValues.reduce((sum, r) => sum + r, 0);
+  const avgR = totalTrades ? totalR / totalTrades : 0;
+
+  const winRs = group.filter((t) => (t.pnl ?? 0) > 0).map((t) => t.rMultiple ?? 0);
+  const lossRs = group.filter((t) => (t.pnl ?? 0) < 0).map((t) => t.rMultiple ?? 0);
+  const avgWinR = winRs.length ? winRs.reduce((s, r) => s + r, 0) / winRs.length : 0;
+  const avgLossR = lossRs.length ? lossRs.reduce((s, r) => s + r, 0) / lossRs.length : 0;
+  const lossRate = totalTrades ? losses / totalTrades : 0;
+  const expectancy = (winRate / 100) * avgWinR - lossRate * Math.abs(avgLossR);
+
+  return { trades: totalTrades, winRate, netPnl, profitFactor, totalR, avgR, expectancy };
 }
 
 function groupBy(trades: Trade[], keyFn: (t: Trade) => string): GroupedPerformance[] {
@@ -180,15 +222,24 @@ function groupBy(trades: Trade[], keyFn: (t: Trade) => string): GroupedPerforman
     groups.get(key)!.push(trade);
   }
 
-  return Array.from(groups.entries()).map(([label, group]) => {
-    const wins = group.filter((t) => (t.pnl ?? 0) > 0).length;
-    return {
-      label,
-      netPnl: group.reduce((sum, t) => sum + (t.pnl ?? 0), 0),
-      winRate: group.length ? (wins / group.length) * 100 : 0,
-      trades: group.length,
-    };
-  });
+  return Array.from(groups.entries())
+    .map(([label, group]) => ({ label, ...summarizeGroup(group) }))
+    .sort((a, b) => b.trades - a.trades);
+}
+
+/** Like groupBy, but a single trade can contribute to several buckets (e.g. tags). */
+function groupByMulti(trades: Trade[], keysFn: (t: Trade) => string[]): GroupedPerformance[] {
+  const groups = new Map<string, Trade[]>();
+  for (const trade of closedTrades(trades)) {
+    for (const key of keysFn(trade)) {
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(trade);
+    }
+  }
+
+  return Array.from(groups.entries())
+    .map(([label, group]) => ({ label, ...summarizeGroup(group) }))
+    .sort((a, b) => b.trades - a.trades);
 }
 
 export function performanceBySession(trades: Trade[]): GroupedPerformance[] {
@@ -199,6 +250,42 @@ export function performanceByStrategy(trades: Trade[]): GroupedPerformance[] {
   return groupBy(trades, (t) => t.strategy ?? "Sin estrategia");
 }
 
+export function performanceBySetup(trades: Trade[]): GroupedPerformance[] {
+  return groupBy(trades, (t) => t.setup ?? "Sin setup");
+}
+
+export function performanceByTimeframe(trades: Trade[]): GroupedPerformance[] {
+  return groupBy(trades, (t) => t.timeframe ?? "Sin timeframe");
+}
+
+export function performanceByExitReason(trades: Trade[]): GroupedPerformance[] {
+  return groupBy(trades, (t) => t.exitReason ?? "Sin especificar");
+}
+
+export function performanceByEmotionBefore(trades: Trade[]): GroupedPerformance[] {
+  return groupBy(trades, (t) => t.emotionBefore ?? "Sin registrar");
+}
+
+export function performanceByEmotionAfter(trades: Trade[]): GroupedPerformance[] {
+  return groupBy(trades, (t) => t.emotionAfter ?? "Sin registrar");
+}
+
+export function performanceByTag(trades: Trade[]): GroupedPerformance[] {
+  return groupByMulti(trades, (t) => (t.tags.length ? t.tags : ["Sin etiquetas"]));
+}
+
+const QUALITY_LABELS: Record<Quality, string> = {
+  a_plus: "A+",
+  a: "A",
+  b: "B",
+  c: "C",
+  d: "D",
+};
+
+export function performanceByQuality(trades: Trade[]): GroupedPerformance[] {
+  return groupBy(trades, (t) => (t.quality ? QUALITY_LABELS[t.quality] : "Sin calificar"));
+}
+
 const WEEKDAYS_ES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
 export function performanceByWeekday(trades: Trade[]): GroupedPerformance[] {
@@ -207,6 +294,15 @@ export function performanceByWeekday(trades: Trade[]): GroupedPerformance[] {
     .concat(WEEKDAYS_ES[0])
     .map(
       (day) =>
-        result.find((r) => r.label === day) ?? { label: day, netPnl: 0, winRate: 0, trades: 0 }
+        result.find((r) => r.label === day) ?? {
+          label: day,
+          trades: 0,
+          winRate: 0,
+          netPnl: 0,
+          profitFactor: null,
+          totalR: 0,
+          avgR: 0,
+          expectancy: 0,
+        }
     );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -18,18 +18,47 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CreatableSelect, CreatableMultiSelect } from "@/components/ui/creatable-select";
+import { ScreenshotUploader } from "@/components/trades/screenshot-uploader";
 import { useUIStore } from "@/store/ui-store";
 import { useJournalStore } from "@/store/journal-store";
-import { createTrade } from "@/app/(app)/actions";
+import { createTrade, createTradeOption, getTradeOptions } from "@/app/(app)/actions";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { DISCIPLINE_ITEMS, computeDisciplineScore } from "@/lib/discipline";
+import type { TradeScreenshot } from "@/types/trade";
 
 const MARKETS = ["Forex", "Cripto", "Índices", "Acciones", "Materias primas", "Futuros"];
 const SESSIONS = ["Asia", "Londres", "Nueva York", "Solapamiento Londres-NY"];
-const IMPORTANCE_LEVELS = [
-  { value: "a_plus", label: "A+" },
-  { value: "media", label: "Media" },
-  { value: "baja", label: "Baja" },
+const QUALITY_LEVELS = [
+  { value: "a_plus", label: "A+ (Ejecución perfecta)" },
+  { value: "a", label: "A (Muy buena)" },
+  { value: "b", label: "B (Buena)" },
+  { value: "c", label: "C (Regular)" },
+  { value: "d", label: "D (Mala)" },
 ] as const;
+const TIMEFRAMES = ["1m", "3m", "5m", "15m", "1H", "4H", "Diario"];
+const EXIT_REASONS = [
+  "Take Profit",
+  "Stop Loss",
+  "Break Even",
+  "Trailing Stop",
+  "Cierre manual",
+  "Parcial + Break Even",
+  "Salida anticipada",
+];
+const EMOTIONS_BEFORE = ["Tranquilo", "Seguro", "Ansioso", "FOMO", "Impaciente", "Cansado"];
+const EMOTIONS_AFTER = ["Feliz", "Neutral", "Frustrado", "Molesto", "Decepcionado"];
+const TAG_SUGGESTIONS = [
+  "FOMO",
+  "Revenge",
+  "Entrada tardía",
+  "Excelente gestión",
+  "Alta probabilidad",
+  "Noticias",
+  "Liquidez",
+  "Mala gestión",
+  "Error psicológico",
+];
 
 const INSTRUMENTS_BY_MARKET: Record<string, string[]> = {
   Forex: ["EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF", "AUD/USD", "USD/CAD", "NZD/USD", "EUR/GBP", "EUR/JPY", "GBP/JPY"],
@@ -46,6 +75,11 @@ const optionalNumber = z.preprocess(
   z.number().optional()
 );
 
+const screenshotSchema = z.object({
+  url: z.string(),
+  category: z.enum(["before", "during", "after"]),
+});
+
 const schema = z.object({
   instrument: z.string().min(1, "Requerido"),
   market: z.string().min(1, "Requerido"),
@@ -56,12 +90,19 @@ const schema = z.object({
   riskPercent: z.coerce.number().positive("Debe ser mayor a 0"),
   resultType: z.enum(["tp", "sl"], { message: "Requerido" }),
   rMultiple: z.coerce.number({ message: "Requerido" }),
+  quality: z.enum(["a_plus", "a", "b", "c", "d"]).optional(),
+  setup: z.string().optional(),
+  timeframe: z.string().optional(),
+  exitReason: z.string().optional(),
+  emotionBefore: z.string().optional(),
+  emotionAfter: z.string().optional(),
+  tags: z.array(z.string()),
   enteredAt: z.string().min(1, "Requerido"),
   exitedAt: z.string().min(1, "Requerido"),
   strategy: z.string().optional(),
   session: z.string().optional(),
-  importance: z.enum(["a_plus", "media", "baja"]).optional(),
-  followedPlan: z.boolean(),
+  screenshots: z.array(screenshotSchema),
+  disciplineChecklist: z.array(z.string()),
   notes: z.string().optional(),
 });
 
@@ -71,12 +112,21 @@ function computeOutcome(values: z.output<typeof schema>) {
   return { pnl: Math.round(values.riskPercent * values.rMultiple * 100) / 100 };
 }
 
+interface OptionLists {
+  setup: string[];
+  strategy: string[];
+  tag: string[];
+}
+
+const EMPTY_OPTIONS: OptionLists = { setup: [], strategy: [], tag: [] };
+
 export function NewTradeDialog() {
   const isOpen = useUIStore((s) => s.isNewTradeOpen);
   const close = useUIStore((s) => s.closeNewTrade);
   const journalType = useJournalStore((s) => s.journalType);
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [options, setOptions] = useState<OptionLists>(EMPTY_OPTIONS);
 
   const {
     register,
@@ -89,21 +139,38 @@ export function NewTradeDialog() {
     resolver: zodResolver(schema),
     defaultValues: {
       direction: "long",
-      followedPlan: true,
+      tags: [],
+      screenshots: [],
+      disciplineChecklist: [],
       enteredAt: new Date().toISOString().slice(0, 16),
       exitedAt: new Date().toISOString().slice(0, 16),
     },
   });
 
+  useEffect(() => {
+    if (!isOpen) return;
+    getTradeOptions(journalType).then(setOptions);
+  }, [isOpen, journalType]);
+
   const direction = watch("direction");
-  const followedPlan = watch("followedPlan");
   const market = watch("market");
   const instrument = watch("instrument");
   const session = watch("session");
   const resultType = watch("resultType");
-  const importance = watch("importance");
+  const quality = watch("quality");
+  const setup = watch("setup");
+  const strategy = watch("strategy");
+  const timeframe = watch("timeframe");
+  const exitReason = watch("exitReason");
+  const emotionBefore = watch("emotionBefore");
+  const emotionAfter = watch("emotionAfter");
+  const tags = watch("tags");
+  const screenshots = watch("screenshots");
+  const disciplineChecklist = watch("disciplineChecklist");
 
   const instrumentOptions = market ? INSTRUMENTS_BY_MARKET[market] ?? [] : ALL_INSTRUMENTS;
+  const tagOptions = Array.from(new Set([...TAG_SUGGESTIONS, ...options.tag]));
+  const disciplineScore = computeDisciplineScore(disciplineChecklist ?? []);
 
   function onOpenChange(open: boolean) {
     if (!open) {
@@ -125,6 +192,22 @@ export function NewTradeDialog() {
     }
   }
 
+  function persistOption(kind: "setup" | "strategy" | "tag", name: string) {
+    setOptions((prev) => ({
+      ...prev,
+      [kind]: prev[kind].includes(name) ? prev[kind] : [...prev[kind], name],
+    }));
+    void createTradeOption(journalType, kind, name);
+  }
+
+  function toggleDisciplineItem(id: string, checked: boolean) {
+    const current = disciplineChecklist ?? [];
+    setValue(
+      "disciplineChecklist",
+      checked ? [...current, id] : current.filter((i) => i !== id)
+    );
+  }
+
   function onSubmit(raw: FormValues) {
     const values = schema.parse(raw);
     const { pnl } = computeOutcome(values);
@@ -141,15 +224,22 @@ export function NewTradeDialog() {
         takeProfitPrice: values.takeProfitPrice ?? null,
         riskPercent: values.riskPercent,
         resultType: values.resultType,
-        importance: values.importance ?? null,
+        quality: values.quality ?? null,
+        setup: values.setup || null,
+        timeframe: values.timeframe || null,
+        exitReason: values.exitReason || null,
+        emotionBefore: values.emotionBefore || null,
+        emotionAfter: values.emotionAfter || null,
+        tags: values.tags,
         enteredAt: new Date(values.enteredAt).toISOString(),
         exitedAt: new Date(values.exitedAt).toISOString(),
-        strategy: values.strategy ?? null,
-        session: values.session ?? null,
-        screenshots: [],
+        strategy: values.strategy || null,
+        session: values.session || null,
+        screenshots: values.screenshots as TradeScreenshot[],
         pnl,
         rMultiple: values.rMultiple,
-        followedPlan: values.followedPlan,
+        disciplineChecklist: values.disciplineChecklist,
+        disciplineScore: computeDisciplineScore(values.disciplineChecklist),
         notes: values.notes ?? null,
       });
 
@@ -305,8 +395,78 @@ export function NewTradeDialog() {
               {errors.riskPercent ? <FieldError message={errors.riskPercent.message} /> : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="strategy">Estrategia</Label>
-              <Input id="strategy" placeholder="Ruptura de rango" {...register("strategy")} />
+              <Label>Calidad de la ejecución</Label>
+              <Select
+                value={quality ?? ""}
+                onValueChange={(v) => setValue("quality", v as FormValues["quality"])}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  {QUALITY_LEVELS.map((level) => (
+                    <SelectItem key={level.value} value={level.value}>
+                      {level.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Setup</Label>
+              <CreatableSelect
+                value={setup ?? ""}
+                onValueChange={(v) => setValue("setup", v)}
+                options={options.setup}
+                onCreate={(name) => persistOption("setup", name)}
+                placeholder="Liquidity Sweep"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Estrategia</Label>
+              <CreatableSelect
+                value={strategy ?? ""}
+                onValueChange={(v) => setValue("strategy", v)}
+                options={options.strategy}
+                onCreate={(name) => persistOption("strategy", name)}
+                placeholder="ICT, SMC, Wyckoff..."
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Timeframe</Label>
+              <Select value={timeframe ?? ""} onValueChange={(v) => setValue("timeframe", v ?? undefined)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMEFRAMES.map((tf) => (
+                    <SelectItem key={tf} value={tf}>
+                      {tf}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Motivo de salida</Label>
+              <Select value={exitReason ?? ""} onValueChange={(v) => setValue("exitReason", v ?? undefined)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXIT_REASONS.map((reason) => (
+                    <SelectItem key={reason} value={reason}>
+                      {reason}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -340,18 +500,15 @@ export function NewTradeDialog() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Importancia</Label>
-              <Select
-                value={importance ?? ""}
-                onValueChange={(v) => setValue("importance", v as "a_plus" | "media" | "baja")}
-              >
+              <Label>Estado emocional antes</Label>
+              <Select value={emotionBefore ?? ""} onValueChange={(v) => setValue("emotionBefore", v ?? undefined)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecciona" />
                 </SelectTrigger>
                 <SelectContent>
-                  {IMPORTANCE_LEVELS.map((level) => (
-                    <SelectItem key={level.value} value={level.value}>
-                      {level.label}
+                  {EMOTIONS_BEFORE.map((e) => (
+                    <SelectItem key={e} value={e}>
+                      {e}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -360,17 +517,59 @@ export function NewTradeDialog() {
           </div>
 
           <div className="space-y-1.5">
+            <Label>Estado emocional después</Label>
+            <Select value={emotionAfter ?? ""} onValueChange={(v) => setValue("emotionAfter", v ?? undefined)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecciona" />
+              </SelectTrigger>
+              <SelectContent>
+                {EMOTIONS_AFTER.map((e) => (
+                  <SelectItem key={e} value={e}>
+                    {e}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Etiquetas</Label>
+            <CreatableMultiSelect
+              value={tags ?? []}
+              onValueChange={(v) => setValue("tags", v)}
+              options={tagOptions}
+              onCreate={(name) => persistOption("tag", name)}
+              placeholder="FOMO, Revenge, Liquidez..."
+            />
+          </div>
+
+          <ScreenshotUploader
+            value={screenshots ?? []}
+            onChange={(shots) => setValue("screenshots", shots)}
+          />
+
+          <div className="space-y-1.5">
             <Label htmlFor="notes">Notas</Label>
             <Textarea id="notes" rows={3} placeholder="¿Qué funcionó? ¿Qué mejorarías?" {...register("notes")} />
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-ink-2">
-            <Checkbox
-              checked={followedPlan}
-              onCheckedChange={(checked) => setValue("followedPlan", checked === true)}
-            />
-            Seguí mi plan de trading
-          </label>
+          <div className="space-y-2 rounded-lg border border-line px-3 py-2.5">
+            <div className="flex items-center justify-between">
+              <Label>Checklist de disciplina</Label>
+              <span className="font-mono text-xs text-gold">{disciplineScore}%</span>
+            </div>
+            <div className="space-y-1.5">
+              {DISCIPLINE_ITEMS.map((item) => (
+                <label key={item.id} className="flex items-center gap-2 text-sm text-ink-2">
+                  <Checkbox
+                    checked={(disciplineChecklist ?? []).includes(item.id)}
+                    onCheckedChange={(checked) => toggleDisciplineItem(item.id, checked === true)}
+                  />
+                  {item.label}
+                </label>
+              ))}
+            </div>
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

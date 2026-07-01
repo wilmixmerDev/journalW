@@ -1,4 +1,5 @@
-import type { Direction, Importance, JournalType, ResultType, Trade } from "@/types/trade";
+import { DISCIPLINE_ITEMS, computeDisciplineScore } from "@/lib/discipline";
+import type { Direction, JournalType, Quality, ResultType, Trade } from "@/types/trade";
 
 // Deterministic PRNG (mulberry32) so mock data is stable across renders/reloads.
 function mulberry32(seed: number) {
@@ -27,21 +28,54 @@ const INSTRUMENTS: { symbol: string; market: string }[] = [
   { symbol: "NQ", market: "Futuros" },
 ];
 
-const STRATEGIES = [
-  "Ruptura de rango",
-  "Retroceso a media móvil",
-  "Order block",
-  "Liquidez + FVG",
-  "Reversión en soporte",
-  "Tendencia + pullback",
-];
+const STRATEGIES = ["ICT", "SMC", "Wyckoff", "Price Action", "Order Flow"];
+
+const SETUPS = ["Liquidity Sweep", "Order Block", "FVG Retest", "Breaker Block", "Reversión en soporte"];
 
 const SESSIONS = ["Asia", "Londres", "Nueva York", "Solapamiento Londres-NY"];
 
-const IMPORTANCE_LEVELS: Importance[] = ["a_plus", "media", "baja"];
+const QUALITY_LEVELS: Quality[] = ["a_plus", "a", "b", "c", "d"];
+
+const TIMEFRAMES = ["1m", "3m", "5m", "15m", "1H", "4H", "Diario"];
+
+const EXIT_REASONS = [
+  "Take Profit",
+  "Stop Loss",
+  "Break Even",
+  "Trailing Stop",
+  "Cierre manual",
+  "Parcial + Break Even",
+  "Salida anticipada",
+];
+
+const EMOTIONS_BEFORE = ["Tranquilo", "Seguro", "Ansioso", "FOMO", "Impaciente", "Cansado"];
+const EMOTIONS_AFTER = ["Feliz", "Neutral", "Frustrado", "Molesto", "Decepcionado"];
+
+const TAG_POOL = [
+  "FOMO",
+  "Revenge",
+  "Entrada tardía",
+  "Excelente gestión",
+  "Alta probabilidad",
+  "Noticias",
+  "Liquidez",
+  "Mala gestión",
+  "Error psicológico",
+];
 
 function pick<T>(rng: () => number, items: T[]): T {
   return items[Math.floor(rng() * items.length)];
+}
+
+function pickTags(rng: () => number): string[] {
+  const count = Math.floor(rng() * 3);
+  if (count === 0) return [];
+  const shuffled = [...TAG_POOL].sort(() => rng() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+function pickChecklist(rng: () => number): string[] {
+  return DISCIPLINE_ITEMS.filter(() => rng() > 0.25).map((i) => i.id);
 }
 
 interface GenerateOptions {
@@ -83,6 +117,9 @@ export function generateMockTrades({
         ? entryPrice + stopDistance * Math.abs(rMultiple)
         : entryPrice - stopDistance * Math.abs(rMultiple);
 
+    const disciplineChecklist = pickChecklist(rng);
+    const exitReason = win ? "Take Profit" : pick(rng, EXIT_REASONS);
+
     trades.push({
       id: `mock-${journalType}-${i}`,
       userId,
@@ -96,7 +133,13 @@ export function generateMockTrades({
       takeProfitPrice: Math.round(takeProfitPrice * 100) / 100,
       riskPercent,
       resultType,
-      importance: pick(rng, IMPORTANCE_LEVELS),
+      quality: pick(rng, QUALITY_LEVELS),
+      setup: pick(rng, SETUPS),
+      timeframe: pick(rng, TIMEFRAMES),
+      exitReason,
+      emotionBefore: pick(rng, EMOTIONS_BEFORE),
+      emotionAfter: pick(rng, EMOTIONS_AFTER),
+      tags: pickTags(rng),
       enteredAt: enteredAt.toISOString(),
       exitedAt: exitedAt.toISOString(),
       strategy: pick(rng, STRATEGIES),
@@ -104,7 +147,8 @@ export function generateMockTrades({
       screenshots: [],
       pnl,
       rMultiple,
-      followedPlan: rng() > 0.22,
+      disciplineChecklist,
+      disciplineScore: computeDisciplineScore(disciplineChecklist),
       notes:
         rng() > 0.5
           ? "Entrada alineada con el plan, gestión de riesgo respetada."

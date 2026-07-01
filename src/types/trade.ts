@@ -4,7 +4,13 @@ export type Direction = "long" | "short";
 export type JournalType = "live" | "backtest";
 export type TradeStatus = "open" | "closed";
 export type ResultType = "tp" | "sl";
-export type Importance = "a_plus" | "media" | "baja";
+export type Quality = "a_plus" | "a" | "b" | "c" | "d";
+export type ScreenshotCategory = "before" | "during" | "after";
+
+export interface TradeScreenshot {
+  url: string;
+  category: ScreenshotCategory;
+}
 
 export type TradeRow = Database["public"]["Tables"]["trades"]["Row"];
 export type TradeInsert = Database["public"]["Tables"]["trades"]["Insert"];
@@ -22,15 +28,22 @@ export interface Trade {
   takeProfitPrice: number | null;
   riskPercent: number;
   resultType: ResultType | null;
-  importance: Importance | null;
+  quality: Quality | null;
+  setup: string | null;
+  timeframe: string | null;
+  exitReason: string | null;
+  emotionBefore: string | null;
+  emotionAfter: string | null;
+  tags: string[];
   enteredAt: string;
   exitedAt: string | null;
   strategy: string | null;
   session: string | null;
-  screenshots: string[];
+  screenshots: TradeScreenshot[];
   pnl: number | null;
   rMultiple: number | null;
-  followedPlan: boolean;
+  disciplineChecklist: string[];
+  disciplineScore: number;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -50,15 +63,22 @@ export function tradeFromRow(row: TradeRow): Trade {
     takeProfitPrice: row.take_profit_price,
     riskPercent: row.risk_percent,
     resultType: row.result_type,
-    importance: row.importance,
+    quality: row.quality,
+    setup: row.setup,
+    timeframe: row.timeframe,
+    exitReason: row.exit_reason,
+    emotionBefore: row.emotion_before,
+    emotionAfter: row.emotion_after,
+    tags: row.tags,
     enteredAt: row.entered_at,
     exitedAt: row.exited_at,
     strategy: row.strategy,
     session: row.session,
-    screenshots: row.screenshots,
+    screenshots: (row.screenshots as unknown as TradeScreenshot[] | null) ?? [],
     pnl: row.pnl,
     rMultiple: row.r_multiple,
-    followedPlan: row.followed_plan,
+    disciplineChecklist: row.discipline_checklist,
+    disciplineScore: row.discipline_score,
     notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -78,15 +98,33 @@ export function tradeToInsert(trade: Partial<Trade> & { userId: string }): Trade
     take_profit_price: trade.takeProfitPrice,
     risk_percent: trade.riskPercent!,
     result_type: trade.resultType,
-    importance: trade.importance,
+    quality: trade.quality,
+    setup: trade.setup,
+    timeframe: trade.timeframe,
+    exit_reason: trade.exitReason,
+    emotion_before: trade.emotionBefore,
+    emotion_after: trade.emotionAfter,
+    tags: trade.tags,
     entered_at: trade.enteredAt,
     exited_at: trade.exitedAt,
     strategy: trade.strategy,
     session: trade.session,
-    screenshots: trade.screenshots,
+    screenshots: trade.screenshots as unknown as TradeInsert["screenshots"],
     pnl: trade.pnl,
     r_multiple: trade.rMultiple,
-    followed_plan: trade.followedPlan,
+    discipline_checklist: trade.disciplineChecklist,
+    discipline_score: trade.disciplineScore,
     notes: trade.notes,
   };
+}
+
+export type TradeOptionKind = "setup" | "strategy" | "tag";
+
+export interface TradeOption {
+  id: string;
+  userId: string;
+  journalType: JournalType;
+  kind: TradeOptionKind;
+  name: string;
+  createdAt: string;
 }
