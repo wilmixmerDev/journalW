@@ -89,15 +89,7 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
 
       <div className="theme-force-light order-1 flex items-center justify-center bg-surface px-6 py-16 text-ink">
         <div className="w-full max-w-[360px]">
-          <div
-            className="animate-auth-up mb-5.5 inline-flex items-center gap-1.5 rounded-full border border-line-2 bg-bg py-1 pr-3 pl-2 text-[11.5px] font-semibold whitespace-nowrap text-ink-2"
-            style={{ animationDelay: "0.02s" }}
-          >
-            <span className="size-1.5 rounded-full bg-gold" />
-            Journal W · Pro
-          </div>
-
-          <h2 className="animate-auth-up mb-1.5 font-serif text-[32px] font-normal" style={{ animationDelay: "0.06s" }}>
+          <h2 className="animate-auth-up mb-1.5 font-serif text-[32px] font-normal" style={{ animationDelay: "0.02s" }}>
             {mode === "login" ? "Bienvenido de vuelta" : "Crea tu cuenta"}
           </h2>
           <p className="animate-auth-up mb-8 text-sm text-ink-2" style={{ animationDelay: "0.1s" }}>

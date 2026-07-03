@@ -173,28 +173,28 @@ const FEED_ROWS: Array<[string, string, string, string, string]> = [
 function FeedPanel() {
   return (
     <div className="animate-fade-in">
-      <div className="mb-2.5 font-mono text-[10px] tracking-[.14em] text-[#8C8577] uppercase">
+      <div className="mb-2 font-mono text-[10px] leading-none tracking-[.14em] text-[#8C8577] uppercase">
         Operaciones recientes
       </div>
       <div>
         {FEED_ROWS.map(([symbol, dir, r, pnl, color], i) => (
           <div
             key={symbol}
-            className="grid animate-auth-up grid-cols-[auto_1fr_auto_auto] items-center gap-3 py-2"
+            className="grid animate-auth-up grid-cols-[auto_1fr_auto_auto] items-center gap-3 py-1.5"
             style={{
               borderBottom: i < FEED_ROWS.length - 1 ? "1px solid rgba(255,255,255,.07)" : "none",
               animationDelay: `${i * 0.07}s`,
             }}
           >
             <span className="size-[7px] rounded-full" style={{ background: color }} />
-            <span className="flex flex-col gap-0.5">
-              <span className="font-mono text-[13px] font-semibold text-[#EDE8DE]">{symbol}</span>
-              <span className="text-[10.5px] tracking-[.04em] text-[#8C8577] uppercase">{dir}</span>
+            <span className="flex flex-col gap-1">
+              <span className="font-mono text-[13px] leading-none font-semibold text-[#EDE8DE]">{symbol}</span>
+              <span className="text-[10.5px] leading-none tracking-[.04em] text-[#8C8577] uppercase">{dir}</span>
             </span>
-            <span className="font-mono text-xs" style={{ color }}>
+            <span className="font-mono text-xs leading-none" style={{ color }}>
               {r}
             </span>
-            <span className="min-w-[62px] text-right font-mono text-[13px] font-semibold" style={{ color }}>
+            <span className="min-w-[62px] text-right font-mono text-[13px] leading-none font-semibold" style={{ color }}>
               {pnl}
             </span>
           </div>
