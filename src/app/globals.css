@@ -59,7 +59,6 @@
   --animate-scale-in: scale-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-slide-in: slide-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-auth-up: auth-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-expand-field: expand-field 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-float-card: float-card 7s ease-in-out infinite;
   --animate-pulse-dot: pulse-dot 2.4s ease-in-out infinite;
   --animate-draw-line: draw-line 1.3s ease both;
@@ -108,20 +107,6 @@
     to {
       opacity: 1;
       transform: translateY(0);
-    }
-  }
-  @keyframes expand-field {
-    from {
-      opacity: 0;
-      max-height: 0;
-      transform: translateY(-6px);
-      margin-bottom: 0;
-    }
-    to {
-      opacity: 1;
-      max-height: 90px;
-      transform: translateY(0);
-      margin-bottom: 18px;
     }
   }
   @keyframes float-card {
@@ -282,6 +267,22 @@
   }
   html {
     @apply font-sans;
+  }
+
+  /* Overrides the browser's forced blue/yellow autofill background — the
+     inset box-shadow trick paints over it without touching background-color,
+     which browsers otherwise refuse to let authors change. */
+  [data-slot="input"]:autofill,
+  [data-slot="input"]:-webkit-autofill,
+  [data-slot="input"]:-webkit-autofill:hover,
+  [data-slot="input"]:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--ink);
+    -webkit-box-shadow: 0 0 0 1000px var(--surface) inset;
+    box-shadow: 0 0 0 1000px var(--surface) inset;
+    caret-color: var(--ink);
+    transition:
+      background-color 9999s ease-in-out 0s,
+      color 9999s ease-in-out 0s;
   }
 }
 

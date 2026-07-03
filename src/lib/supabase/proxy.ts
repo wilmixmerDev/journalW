@@ -37,7 +37,9 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isSetupMfaRoute = pathname === "/login/setup-mfa";
   const isMfaRoute = pathname === "/login/mfa";
-  const isAuthRoute = pathname.startsWith("/login") && !isMfaRoute && !isSetupMfaRoute;
+  const isOnboardingRoute = pathname === "/login/onboarding";
+  const isAuthRoute =
+    pathname.startsWith("/login") && !isMfaRoute && !isSetupMfaRoute && !isOnboardingRoute;
   const isAuthCallback = pathname.startsWith("/auth");
   const isPublicAsset = pathname.startsWith("/_next");
 
@@ -56,7 +58,7 @@ export async function updateSession(request: NextRequest) {
 
   const [{ data: factorsData }, { data: profile }] = await Promise.all([
     supabase.auth.mfa.listFactors(),
-    supabase.from("profiles").select("mfa_exempt").eq("id", user.id).single(),
+    supabase.from("profiles").select("mfa_exempt, onboarding_completed_at").eq("id", user.id).single(),
   ]);
 
   const hasVerifiedFactor = Boolean(factorsData && factorsData.totp.length > 0);
@@ -85,7 +87,16 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
-  if (isAuthRoute || isMfaRoute) {
+  const needsOnboarding = !profile?.onboarding_completed_at;
+
+  if (needsOnboarding) {
+    if (!isOnboardingRoute && !isAuthCallback && !isPublicAsset) {
+      return redirectTo("/login/onboarding");
+    }
+    return supabaseResponse;
+  }
+
+  if (isAuthRoute || isMfaRoute || isOnboardingRoute) {
     return redirectTo("/dashboard");
   }
 

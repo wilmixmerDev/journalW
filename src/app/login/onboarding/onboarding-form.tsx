@@ -1,0 +1,347 @@
+"use client";
+
+import { useState } from "react";
+import { useForm, type FieldPath } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
+import { completeOnboarding, skipOnboarding } from "./actions";
+
+const MARKETS = ["Forex", "Cripto", "Índices", "Acciones", "Materias primas", "Futuros"];
+
+const EXPERIENCE_LEVELS = [
+  { value: "principiante", label: "Principiante" },
+  { value: "intermedio", label: "Intermedio" },
+  { value: "avanzado", label: "Avanzado" },
+  { value: "profesional", label: "Profesional" },
+] as const;
+
+const TIMEZONES = [
+  { value: "America/Bogota", label: "Bogotá, Lima, Quito (UTC-5)" },
+  { value: "America/Mexico_City", label: "Ciudad de México (UTC-6)" },
+  { value: "America/Caracas", label: "Caracas (UTC-4)" },
+  { value: "America/Santiago", label: "Santiago (UTC-4/-3)" },
+  { value: "America/Argentina/Buenos_Aires", label: "Buenos Aires (UTC-3)" },
+  { value: "America/New_York", label: "Nueva York (UTC-5/-4)" },
+  { value: "Europe/Madrid", label: "Madrid (UTC+1/+2)" },
+  { value: "UTC", label: "UTC" },
+];
+
+const optionalNumber = z.preprocess(
+  (v) => (v === "" || v === undefined || v === null ? undefined : Number(v)),
+  z.number().optional()
+);
+
+const schema = z.object({
+  firstName: z.string().min(1, "Requerido"),
+  lastName: z.string().min(1, "Requerido"),
+  phone: z.string().min(1, "Requerido"),
+  country: z.string().min(1, "Requerido"),
+  birthDate: z.string().min(1, "Requerido"),
+  experienceLevel: z.enum(["principiante", "intermedio", "avanzado", "profesional"], {
+    message: "Selecciona una opción",
+  }),
+  markets: z.array(z.string()).min(1, "Selecciona al menos un mercado"),
+  initialCapital: optionalNumber,
+  timezone: z.string().min(1, "Requerido"),
+});
+
+type FormValues = z.input<typeof schema>;
+
+const STEPS: { label: string; fields: FieldPath<FormValues>[] }[] = [
+  { label: "Información personal", fields: ["firstName", "lastName", "phone", "country", "birthDate"] },
+  { label: "Tu operativa", fields: ["experienceLevel", "markets", "timezone"] },
+];
+
+const CHIP_CLASS =
+  "inline-flex cursor-pointer items-center rounded-lg border border-line-2 bg-surface px-3.5 py-2 text-sm font-medium text-ink-2 transition-colors";
+const CHIP_ACTIVE_CLASS = "border-transparent bg-ink text-bg";
+
+export function OnboardingForm() {
+  const [step, setStep] = useState(0);
+  const [isPending, setIsPending] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [justAdvanced, setJustAdvanced] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    trigger,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { markets: [] },
+  });
+
+  const isLastStep = step === STEPS.length - 1;
+  const markets = watch("markets") ?? [];
+  const experienceLevel = watch("experienceLevel");
+
+  function cooldownAfterStepChange() {
+    // Guards against a rapid double-click landing on whichever button re-renders
+    // in the same spot (e.g. "Siguiente" turning into "Completar").
+    setJustAdvanced(true);
+    setTimeout(() => setJustAdvanced(false), 400);
+  }
+
+  async function goNext() {
+    if (justAdvanced) return;
+    const valid = await trigger(STEPS[step].fields);
+    if (valid) {
+      setStep((s) => Math.min(s + 1, STEPS.length - 1));
+      cooldownAfterStepChange();
+    }
+  }
+
+  function goBack() {
+    if (justAdvanced) return;
+    setStep((s) => Math.max(s - 1, 0));
+    cooldownAfterStepChange();
+  }
+
+  function toggleMarket(market: string) {
+    const checked = markets.includes(market);
+    setValue("markets", checked ? markets.filter((m) => m !== market) : [...markets, market], {
+      shouldValidate: true,
+    });
+  }
+
+  async function onSubmit(raw: FormValues) {
+    const values = schema.parse(raw);
+    setServerError(null);
+    setIsPending(true);
+
+    const { error } = await completeOnboarding({
+      firstName: values.firstName,
+      lastName: values.lastName,
+      phone: values.phone,
+      country: values.country,
+      birthDate: values.birthDate,
+      experienceLevel: values.experienceLevel,
+      markets: values.markets,
+      initialCapital: values.initialCapital ?? null,
+      timezone: values.timezone,
+    });
+
+    if (error) {
+      setServerError(error);
+      setIsPending(false);
+      return;
+    }
+
+    // A plain router.push() here can serve a stale client-cached redirect —
+    // /dashboard was repeatedly redirected back to this same page by the
+    // middleware before onboarding was completed. A full navigation forces a
+    // fresh middleware pass instead.
+    window.location.href = "/dashboard";
+  }
+
+  async function handleSkip() {
+    if (justAdvanced) return;
+    setServerError(null);
+    setIsPending(true);
+
+    const { error } = await skipOnboarding();
+    if (error) {
+      setServerError(error);
+      setIsPending(false);
+      return;
+    }
+
+    window.location.href = "/dashboard";
+  }
+
+  return (
+    <div className="w-full max-w-lg animate-fade-up">
+      <h1 className="font-serif text-4xl text-ink">Cuéntanos sobre ti</h1>
+      <p className="mt-2 text-sm text-ink-2">
+        Nos ayuda a personalizar tu experiencia. Puedes omitir este paso y completarlo después.
+      </p>
+
+      <div className="mt-6 space-y-1.5">
+        <div className="flex items-center justify-between text-xs text-ink-2">
+          <span>
+            Paso {step + 1} de {STEPS.length}: {STEPS[step].label}
+          </span>
+          <span className="font-mono">{Math.round(((step + 1) / STEPS.length) * 100)}%</span>
+        </div>
+        <Progress value={((step + 1) / STEPS.length) * 100} />
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-5">
+        {serverError ? (
+          <p className="rounded-md border border-neg/30 bg-neg-soft px-3 py-2 text-xs text-neg">{serverError}</p>
+        ) : null}
+
+        {step === 0 ? (
+          <div className="animate-fade-in space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="firstName">Nombre</Label>
+                <Input
+                  id="firstName"
+                  autoComplete="given-name"
+                  aria-invalid={Boolean(errors.firstName)}
+                  {...register("firstName")}
+                />
+                {errors.firstName ? <FieldError message={errors.firstName.message} /> : null}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="lastName">Apellido</Label>
+                <Input
+                  id="lastName"
+                  autoComplete="family-name"
+                  aria-invalid={Boolean(errors.lastName)}
+                  {...register("lastName")}
+                />
+                {errors.lastName ? <FieldError message={errors.lastName.message} /> : null}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="phone">Teléfono</Label>
+              <Input
+                id="phone"
+                type="tel"
+                autoComplete="tel"
+                placeholder="+57 300 000 0000"
+                aria-invalid={Boolean(errors.phone)}
+                {...register("phone")}
+              />
+              {errors.phone ? <FieldError message={errors.phone.message} /> : null}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="country">País</Label>
+                <Input
+                  id="country"
+                  autoComplete="country-name"
+                  placeholder="Colombia"
+                  aria-invalid={Boolean(errors.country)}
+                  {...register("country")}
+                />
+                {errors.country ? <FieldError message={errors.country.message} /> : null}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="birthDate">Fecha de nacimiento</Label>
+                <Input
+                  id="birthDate"
+                  type="date"
+                  aria-invalid={Boolean(errors.birthDate)}
+                  {...register("birthDate")}
+                />
+                {errors.birthDate ? <FieldError message={errors.birthDate.message} /> : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {step === 1 ? (
+          <div className="animate-fade-in space-y-5">
+            <div className="space-y-2">
+              <Label>Nivel de experiencia</Label>
+              <div className="flex flex-wrap gap-2">
+                {EXPERIENCE_LEVELS.map((level) => (
+                  <button
+                    key={level.value}
+                    type="button"
+                    onClick={() => setValue("experienceLevel", level.value, { shouldValidate: true })}
+                    className={cn(CHIP_CLASS, experienceLevel === level.value && CHIP_ACTIVE_CLASS)}
+                  >
+                    {level.label}
+                  </button>
+                ))}
+              </div>
+              {errors.experienceLevel ? <FieldError message={errors.experienceLevel.message} /> : null}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Mercados que operas</Label>
+              <div className="flex flex-wrap gap-2">
+                {MARKETS.map((market) => (
+                  <button
+                    key={market}
+                    type="button"
+                    onClick={() => toggleMarket(market)}
+                    className={cn(CHIP_CLASS, markets.includes(market) && CHIP_ACTIVE_CLASS)}
+                  >
+                    {market}
+                  </button>
+                ))}
+              </div>
+              {errors.markets ? <FieldError message={errors.markets.message} /> : null}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="initialCapital">Capital inicial (opcional)</Label>
+                <Input
+                  id="initialCapital"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.01"
+                  placeholder="10000"
+                  {...register("initialCapital")}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="timezone">Zona horaria</Label>
+                <select
+                  id="timezone"
+                  defaultValue=""
+                  aria-invalid={Boolean(errors.timezone)}
+                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-ink outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive"
+                  {...register("timezone")}
+                >
+                  <option value="" disabled>
+                    Selecciona una zona
+                  </option>
+                  {TIMEZONES.map((tz) => (
+                    <option key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </option>
+                  ))}
+                </select>
+                {errors.timezone ? <FieldError message={errors.timezone.message} /> : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <div className="flex items-center gap-2">
+            {step > 0 ? (
+              <Button type="button" variant="outline" onClick={goBack} disabled={isPending}>
+                Atrás
+              </Button>
+            ) : null}
+            <Button type="button" variant="ghost" onClick={handleSkip} disabled={isPending}>
+              Omitir por ahora
+            </Button>
+          </div>
+          {isLastStep ? (
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Guardando..." : "Completar"}
+            </Button>
+          ) : (
+            <Button type="button" onClick={goNext} disabled={isPending}>
+              Siguiente
+            </Button>
+          )}
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function FieldError({ message }: { message?: string }) {
+  return <p className="text-xs text-neg">{message}</p>;
+}

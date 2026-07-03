@@ -3,6 +3,7 @@
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
@@ -58,12 +59,10 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
       return;
     }
 
-    const name = String(formData.get("name") ?? "").trim();
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: name ? { full_name: name } : undefined,
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
@@ -108,13 +107,6 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
           ) : null}
 
           <form onSubmit={handleSubmit} className="space-y-4" key={mode}>
-            {mode === "signup" ? (
-              <div className="animate-expand-field space-y-1.5 overflow-hidden">
-                <Label htmlFor="name">Nombre</Label>
-                <Input id="name" name="name" placeholder="Tu nombre" autoComplete="name" />
-              </div>
-            ) : null}
-
             <div className="animate-auth-up space-y-1.5" style={{ animationDelay: "0.14s" }}>
               <Label htmlFor="email">Correo</Label>
               <Input
@@ -129,10 +121,9 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
             </div>
             <div className="animate-auth-up space-y-1.5" style={{ animationDelay: "0.18s" }}>
               <Label htmlFor="password">Contraseña</Label>
-              <Input
+              <PasswordInput
                 id="password"
                 name="password"
-                type="password"
                 placeholder="••••••••"
                 required
                 minLength={6}
