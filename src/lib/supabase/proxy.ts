@@ -34,20 +34,59 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAuthRoute = request.nextUrl.pathname.startsWith("/login");
-  const isAuthCallback = request.nextUrl.pathname.startsWith("/auth");
-  const isPublicAsset = request.nextUrl.pathname.startsWith("/_next");
+  const pathname = request.nextUrl.pathname;
+  const isSetupMfaRoute = pathname === "/login/setup-mfa";
+  const isMfaRoute = pathname === "/login/mfa";
+  const isAuthRoute = pathname.startsWith("/login") && !isMfaRoute && !isSetupMfaRoute;
+  const isAuthCallback = pathname.startsWith("/auth");
+  const isPublicAsset = pathname.startsWith("/_next");
 
-  if (!user && !isAuthRoute && !isAuthCallback && !isPublicAsset) {
+  function redirectTo(target: string) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = target;
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+  if (!user) {
+    if (!isAuthRoute && !isAuthCallback && !isPublicAsset) {
+      return redirectTo("/login");
+    }
+    return supabaseResponse;
+  }
+
+  const [{ data: factorsData }, { data: profile }] = await Promise.all([
+    supabase.auth.mfa.listFactors(),
+    supabase.from("profiles").select("mfa_exempt").eq("id", user.id).single(),
+  ]);
+
+  const hasVerifiedFactor = Boolean(factorsData && factorsData.totp.length > 0);
+  const isExempt = profile?.mfa_exempt === true;
+  const mustSetUpMfa = !hasVerifiedFactor && !isExempt;
+
+  if (mustSetUpMfa) {
+    if (!isSetupMfaRoute && !isAuthCallback && !isPublicAsset) {
+      return redirectTo("/login/setup-mfa");
+    }
+    return supabaseResponse;
+  }
+
+  if (isSetupMfaRoute) {
+    // 2FA is already set up (or the user is exempt) — nothing to do here.
+    return redirectTo("/dashboard");
+  }
+
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const needsChallenge = Boolean(aal && aal.nextLevel === "aal2" && aal.currentLevel !== "aal2");
+
+  if (needsChallenge) {
+    if (!isMfaRoute && !isAuthCallback && !isPublicAsset) {
+      return redirectTo("/login/mfa");
+    }
+    return supabaseResponse;
+  }
+
+  if (isAuthRoute || isMfaRoute) {
+    return redirectTo("/dashboard");
   }
 
   return supabaseResponse;

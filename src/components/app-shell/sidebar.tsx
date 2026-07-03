@@ -3,17 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutDashboard, ListChecks, BarChart3, CalendarDays, Plus, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  ListChecks,
+  BarChart3,
+  CalendarDays,
+  Plus,
+  LogOut,
+  Shield,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { JournalSwitch } from "@/components/app-shell/journal-switch";
 import { useUIStore } from "@/store/ui-store";
@@ -29,9 +31,10 @@ const NAV_ITEMS = [
 interface SidebarProps {
   email: string | null;
   isDemo: boolean;
+  isAdmin: boolean;
 }
 
-export function Sidebar({ email, isDemo }: SidebarProps) {
+export function Sidebar({ email, isDemo, isAdmin }: SidebarProps) {
   const pathname = usePathname();
   const openNewTrade = useUIStore((s) => s.openNewTrade);
   const initials = (email ?? "JW").slice(0, 2).toUpperCase();
@@ -50,29 +53,16 @@ export function Sidebar({ email, isDemo }: SidebarProps) {
       </div>
 
       <nav className="mt-4 flex flex-1 flex-col gap-1 px-4">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(`${href}/`);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                active ? "text-bg" : "text-ink-2 hover:bg-surface-2 hover:text-ink"
-              )}
-            >
-              {active ? (
-                <motion.span
-                  layoutId="sidebar-active-pill"
-                  className="absolute inset-0 -z-10 rounded-lg bg-ink"
-                  transition={{ type: "spring", duration: 0.4, bounce: 0.15 }}
-                />
-              ) : null}
-              <Icon className="size-4" />
-              {label}
-            </Link>
-          );
-        })}
+        {NAV_ITEMS.map(({ href, label, icon }) => (
+          <NavLink key={href} href={href} label={label} icon={icon} pathname={pathname} />
+        ))}
+
+        {isAdmin ? (
+          <>
+            <div className="my-2 border-t border-line" />
+            <NavLink href="/admin" label="Administración" icon={Shield} pathname={pathname} />
+          </>
+        ) : null}
       </nav>
 
       {isDemo ? (
@@ -87,28 +77,56 @@ export function Sidebar({ email, isDemo }: SidebarProps) {
           Nueva operación
         </Button>
         <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger aria-label="Cuenta" className="rounded-full outline-none">
-              <Avatar className="size-8">
-                <AvatarFallback className="bg-surface-2 text-xs">{initials}</AvatarFallback>
-              </Avatar>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <div className="px-2 py-1.5 text-xs text-ink-3">{email ?? "Cuenta demo"}</div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={() => signOut()}
-              >
-                <LogOut className="size-4 transition-transform group-focus/dropdown-menu-item:-translate-x-0.5" />
-                Cerrar sesión
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Avatar className="size-8">
+            <AvatarFallback className="bg-surface-2 text-xs">{initials}</AvatarFallback>
+          </Avatar>
           <span className="flex-1 truncate text-xs text-ink-2">{email ?? "Cuenta demo"}</span>
           <ThemeToggle />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Cerrar sesión"
+            onClick={() => signOut()}
+            className="text-neg hover:bg-neg-soft hover:text-neg"
+          >
+            <LogOut className="size-4" />
+          </Button>
         </div>
       </div>
     </aside>
+  );
+}
+
+function NavLink({
+  href,
+  label,
+  icon: Icon,
+  pathname,
+}: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  pathname: string;
+}) {
+  const active = pathname === href || pathname.startsWith(`${href}/`);
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+        active ? "text-bg" : "text-ink-2 hover:bg-surface-2 hover:text-ink"
+      )}
+    >
+      {active ? (
+        <motion.span
+          layoutId="sidebar-active-pill"
+          className="absolute inset-0 -z-10 rounded-lg bg-ink"
+          transition={{ type: "spring", duration: 0.4, bounce: 0.15 }}
+        />
+      ) : null}
+      <Icon className="size-4" />
+      {label}
+    </Link>
   );
 }

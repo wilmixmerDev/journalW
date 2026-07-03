@@ -2,7 +2,9 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/* Excludes .theme-force-light subtrees (e.g. the login form column) so
+   dark: utilities never apply there, even nested under <html class="dark">. */
+@custom-variant dark (&:is(.dark *):not(.theme-force-light, .theme-force-light *));
 
 @theme inline {
   --color-background: var(--background);
@@ -56,6 +58,11 @@
   --animate-fade-in: fade-in 0.3s ease both;
   --animate-scale-in: scale-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-slide-in: slide-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-auth-up: auth-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-expand-field: expand-field 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-float-card: float-card 7s ease-in-out infinite;
+  --animate-pulse-dot: pulse-dot 2.4s ease-in-out infinite;
+  --animate-draw-line: draw-line 1.3s ease both;
 
   @keyframes fade-up {
     from {
@@ -91,6 +98,56 @@
     }
     to {
       transform: translateX(0);
+    }
+  }
+  @keyframes auth-up {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes expand-field {
+    from {
+      opacity: 0;
+      max-height: 0;
+      transform: translateY(-6px);
+      margin-bottom: 0;
+    }
+    to {
+      opacity: 1;
+      max-height: 90px;
+      transform: translateY(0);
+      margin-bottom: 18px;
+    }
+  }
+  @keyframes float-card {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-6px);
+    }
+  }
+  @keyframes pulse-dot {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(98, 193, 140, 0.45);
+    }
+    70% {
+      box-shadow: 0 0 0 7px rgba(98, 193, 140, 0);
+    }
+  }
+  @keyframes draw-line {
+    from {
+      stroke-dashoffset: var(--len);
+    }
+    to {
+      stroke-dashoffset: 0;
     }
   }
 }
@@ -173,6 +230,48 @@
   --ring: var(--ink-3);
 }
 
+/* Forces the light palette regardless of the ancestor's .dark class — used
+   by the login form column, which must stay light even in dark mode. */
+.theme-force-light {
+  --bg: #f4f1ea;
+  --surface: #fbfaf6;
+  --surface-2: #eeeae0;
+  --raise: #ffffff;
+  --ink: #1c1a16;
+  --ink-2: #57534a;
+  --ink-3: #928c80;
+  --line: #e5e0d5;
+  --line-2: #d7d1c4;
+  --pos: #2f7d54;
+  --pos-soft: rgba(47, 125, 84, 0.1);
+  --neg: #b0392e;
+  --neg-soft: rgba(176, 57, 46, 0.1);
+  --gold: #9a7b3f;
+  --gold-soft: rgba(154, 123, 63, 0.12);
+
+  /* shadcn semantic aliases — these only live on :root/.dark by default, so
+     they'd otherwise inherit the dark-frozen value instead of following the
+     overrides above. */
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--bg);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--ink);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--ink-2);
+  --accent: var(--surface-2);
+  --accent-foreground: var(--ink);
+  --destructive: var(--neg);
+  --border: var(--line);
+  --input: var(--line-2);
+  --ring: var(--ink-3);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -204,5 +303,26 @@
     border-radius: 10px;
     border: 3px solid transparent;
     background-clip: content-box;
+  }
+
+  .login-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .login-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.22) 50%, transparent 70%);
+    background-size: 200% 100%;
+    animation: login-shimmer-move 4.5s ease-in-out infinite;
+  }
+  @keyframes login-shimmer-move {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
   }
 }
