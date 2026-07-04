@@ -3,6 +3,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { MobileHeader } from "@/components/app-shell/mobile-header";
 import { MobileNav } from "@/components/app-shell/mobile-nav";
+import { PageTransition } from "@/components/app-shell/page-transition";
 import { NewTradeDialog } from "@/components/trades/new-trade-dialog";
 import { TradeDetailSheet } from "@/components/trades/trade-detail-sheet";
 
@@ -33,7 +34,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Sidebar email={email} isDemo={!configured} isAdmin={isAdmin} />
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileHeader email={email} isAdmin={isAdmin} />
-        <main className="flex-1 pb-20 lg:pb-0">{children}</main>
+        <main className="flex-1 pb-20 lg:pb-0">
+          <PageTransition>{children}</PageTransition>
+        </main>
       </div>
       <MobileNav />
       <NewTradeDialog />
