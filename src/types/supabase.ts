@@ -20,7 +20,7 @@ export interface Database {
           stop_price: number | null;
           take_profit_price: number | null;
           risk_percent: number;
-          result_type: "tp" | "sl" | null;
+          result_type: "tp" | "sl" | "be" | null;
           quality: "a_plus" | "a" | "b" | "c" | "d" | null;
           setup: string | null;
           timeframe: string | null;
@@ -52,7 +52,7 @@ export interface Database {
           stop_price?: number | null;
           take_profit_price?: number | null;
           risk_percent: number;
-          result_type?: "tp" | "sl" | null;
+          result_type?: "tp" | "sl" | "be" | null;
           quality?: "a_plus" | "a" | "b" | "c" | "d" | null;
           setup?: string | null;
           timeframe?: string | null;

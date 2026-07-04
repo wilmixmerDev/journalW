@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useRef, useState, useTransition, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -8,11 +8,17 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { signInWithGoogle } from "./actions";
-import { LoginShowcase } from "./login-showcase";
+import { LoginShowcase, type MfaSetupCardProps } from "./login-showcase";
 
 interface LoginFormProps {
   errorMessage?: string;
   notice?: string;
+}
+
+interface Enrollment {
+  factorId: string;
+  qrCode: string;
+  secret: string;
 }
 
 export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProps) {
@@ -22,6 +28,14 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
   const [isGooglePending, startGoogleTransition] = useTransition();
   const [error, setError] = useState<string | null>(errorMessage ?? null);
   const [notice, setNotice] = useState<string | null>(initialNotice ?? null);
+
+  // Post-signup inline 2FA enrollment: the right showcase panel transitions
+  // into the QR setup card so account creation feels like one continuous flow.
+  const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaError, setMfaError] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const isVerifyingRef = useRef(false);
 
   function switchMode(next: "login" | "signup") {
     setMode(next);
@@ -74,7 +88,9 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
     }
 
     if (data.session) {
-      router.push("/login/setup-mfa");
+      const enrolled = await enrollTotp();
+      setIsPending(false);
+      if (enrolled) setEnrollment(enrolled);
       return;
     }
 
@@ -82,108 +98,240 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
     setIsPending(false);
   }
 
+  async function enrollTotp(): Promise<Enrollment | null> {
+    const supabase = createClient();
+
+    async function cleanUpUnverified() {
+      const { data } = await supabase.auth.mfa.listFactors();
+      for (const factor of data?.all ?? []) {
+        if (factor.factor_type === "totp" && factor.status === "unverified") {
+          await supabase.auth.mfa.unenroll({ factorId: factor.id });
+        }
+      }
+    }
+
+    await cleanUpUnverified();
+    let { data, error: enrollError } = await supabase.auth.mfa.enroll({
+      factorType: "totp",
+      friendlyName: "Authenticator",
+    });
+
+    if (enrollError?.message.includes("already exists")) {
+      await cleanUpUnverified();
+      ({ data, error: enrollError } = await supabase.auth.mfa.enroll({
+        factorType: "totp",
+        friendlyName: "Authenticator",
+      }));
+    }
+
+    if (enrollError || !data) {
+      // Fall back to the standalone setup page (the middleware sends the
+      // session there anyway on the next navigation).
+      window.location.href = "/login/setup-mfa";
+      return null;
+    }
+
+    return { factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret };
+  }
+
+  async function verifyMfa(currentCode: string) {
+    if (!enrollment || isVerifyingRef.current) return;
+    isVerifyingRef.current = true;
+    setIsVerifying(true);
+    setMfaError(null);
+
+    const supabase = createClient();
+    const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({
+      factorId: enrollment.factorId,
+      code: currentCode,
+    });
+
+    if (verifyError) {
+      setMfaError(verifyError.message);
+      setIsVerifying(false);
+      isVerifyingRef.current = false;
+      return;
+    }
+
+    // Full navigation so the middleware re-evaluates the fresh AAL2 session.
+    window.location.href = "/login/onboarding";
+  }
+
+  function handleMfaCodeChange(event: ChangeEvent<HTMLInputElement>) {
+    const value = event.target.value;
+    setMfaCode(value);
+    if (value.length === 6) {
+      verifyMfa(value);
+    }
+  }
+
+  async function abandonSignup() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setEnrollment(null);
+    setMfaCode("");
+    setMfaError(null);
+    switchMode("login");
+  }
+
+  const mfaSetup: MfaSetupCardProps | null = enrollment
+    ? {
+        qrCode: enrollment.qrCode,
+        secret: enrollment.secret,
+        code: mfaCode,
+        error: mfaError,
+        isPending: isVerifying,
+        onCodeChange: handleMfaCodeChange,
+        onSubmit: (e) => {
+          e.preventDefault();
+          verifyMfa(mfaCode);
+        },
+      }
+    : null;
+
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_.95fr]">
-      <LoginShowcase />
+      <LoginShowcase mfaSetup={mfaSetup} />
 
       <div className="theme-force-light order-1 flex items-center justify-center bg-surface px-6 py-16 text-ink">
-        <div className="w-full max-w-[360px]">
-          <h2 className="animate-auth-up mb-1.5 font-serif text-[32px] font-normal" style={{ animationDelay: "0.02s" }}>
-            {mode === "login" ? "Bienvenido de vuelta" : "Crea tu cuenta"}
-          </h2>
-          <p className="animate-auth-up mb-8 text-sm text-ink-2" style={{ animationDelay: "0.1s" }}>
-            {mode === "login"
-              ? "Inicia sesión para continuar registrando tus operaciones."
-              : "Empieza a registrar y analizar tu operativa hoy mismo."}
-          </p>
-
-          {error ? (
-            <div className="mb-6 rounded-lg border border-neg/30 bg-neg-soft px-4 py-3 text-sm text-neg">{error}</div>
-          ) : null}
-          {notice === "confirm-email" ? (
-            <div className="mb-6 rounded-lg border border-gold/30 bg-gold-soft px-4 py-3 text-sm text-gold">
-              Revisa tu correo para confirmar tu cuenta antes de iniciar sesión.
+        {enrollment ? (
+          <div className="w-full max-w-[360px] animate-fade-up">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-pos/30 bg-pos-soft px-3 py-1 text-xs font-semibold text-pos">
+              <span className="size-1.5 rounded-full bg-pos" />
+              Cuenta creada
             </div>
-          ) : null}
+            <h2 className="mb-1.5 font-serif text-[32px] font-normal">Un último paso</h2>
+            <p className="mb-6 text-sm text-ink-2">
+              Por seguridad, Journal W requiere una app autenticadora (Google Authenticator, Authy...).
+              <span className="hidden lg:inline"> Escanea el código QR del panel derecho y escribe el código de 6 dígitos.</span>
+            </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4" key={mode}>
-            <div className="animate-auth-up space-y-1.5" style={{ animationDelay: "0.14s" }}>
-              <Label htmlFor="email">Correo</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="tu@correo.com"
-                required
-                autoComplete="email"
-                aria-invalid={Boolean(error)}
-              />
+            {/* On mobile the dark showcase panel doesn't exist, so the QR card renders here. */}
+            <div className="mb-6 lg:hidden">
+              <div className="space-y-3 rounded-xl border border-line bg-bg p-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={enrollment.qrCode} alt="Código QR para activar 2FA" className="mx-auto size-40 rounded-lg bg-white p-2" />
+                <p className="rounded-md border border-line bg-surface-2 px-3 py-2 text-center font-mono text-xs break-all text-ink-2">
+                  {enrollment.secret}
+                </p>
+                {mfaError ? (
+                  <p className="rounded-md border border-neg/30 bg-neg-soft px-3 py-2 text-xs text-neg">{mfaError}</p>
+                ) : null}
+                <Input
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  placeholder="Código de 6 dígitos"
+                  value={mfaCode}
+                  onChange={handleMfaCodeChange}
+                  aria-invalid={Boolean(mfaError)}
+                />
+              </div>
             </div>
-            <div className="animate-auth-up space-y-1.5" style={{ animationDelay: "0.18s" }}>
-              <Label htmlFor="password">Contraseña</Label>
-              <PasswordInput
-                id="password"
-                name="password"
-                placeholder="••••••••"
-                required
-                minLength={6}
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                aria-invalid={Boolean(error)}
-              />
+
+            <Button type="button" variant="ghost" className="w-full" disabled={isVerifying} onClick={abandonSignup}>
+              ← Volver al inicio de sesión
+            </Button>
+          </div>
+        ) : (
+          <div className="w-full max-w-[360px]">
+            <h2 className="animate-auth-up mb-1.5 font-serif text-[32px] font-normal" style={{ animationDelay: "0.02s" }}>
+              {mode === "login" ? "Bienvenido de vuelta" : "Crea tu cuenta"}
+            </h2>
+            <p className="animate-auth-up mb-8 text-sm text-ink-2" style={{ animationDelay: "0.1s" }}>
+              {mode === "login"
+                ? "Inicia sesión para continuar registrando tus operaciones."
+                : "Empieza a registrar y analizar tu operativa hoy mismo."}
+            </p>
+
+            {error ? (
+              <div className="mb-6 rounded-lg border border-neg/30 bg-neg-soft px-4 py-3 text-sm text-neg">{error}</div>
+            ) : null}
+            {notice === "confirm-email" ? (
+              <div className="mb-6 rounded-lg border border-gold/30 bg-gold-soft px-4 py-3 text-sm text-gold">
+                Revisa tu correo para confirmar tu cuenta antes de iniciar sesión.
+              </div>
+            ) : null}
+
+            <form onSubmit={handleSubmit} className="space-y-4" key={mode}>
+              <div className="animate-auth-up space-y-1.5" style={{ animationDelay: "0.14s" }}>
+                <Label htmlFor="email">Correo</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="tu@correo.com"
+                  required
+                  autoComplete="email"
+                  aria-invalid={Boolean(error)}
+                />
+              </div>
+              <div className="animate-auth-up space-y-1.5" style={{ animationDelay: "0.18s" }}>
+                <Label htmlFor="password">Contraseña</Label>
+                <PasswordInput
+                  id="password"
+                  name="password"
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  aria-invalid={Boolean(error)}
+                />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={isPending}
+                className="login-shimmer animate-auth-up h-auto w-full py-3 text-sm"
+                style={{ animationDelay: "0.22s" }}
+              >
+                {isPending ? "Procesando..." : mode === "login" ? "Entrar al journal →" : "Crear cuenta →"}
+              </Button>
+            </form>
+
+            <div className="animate-auth-up my-5.5 flex items-center gap-3 text-xs text-ink-3" style={{ animationDelay: "0.26s" }}>
+              <div className="h-px flex-1 bg-line" />o<div className="h-px flex-1 bg-line" />
             </div>
 
             <Button
-              type="submit"
-              disabled={isPending}
-              className="login-shimmer animate-auth-up h-auto w-full py-3 text-sm"
-              style={{ animationDelay: "0.22s" }}
+              type="button"
+              variant="outline"
+              disabled={isGooglePending}
+              onClick={() => startGoogleTransition(() => signInWithGoogle())}
+              className="animate-auth-up h-auto w-full gap-2 py-3 text-sm"
+              style={{ animationDelay: "0.3s" }}
             >
-              {isPending ? "Procesando..." : mode === "login" ? "Entrar al journal →" : "Crear cuenta →"}
+              <GoogleIcon className="size-4" />
+              {mode === "login" ? "Continuar con Google" : "Registrarse con Google"}
             </Button>
-          </form>
 
-          <div className="animate-auth-up my-5.5 flex items-center gap-3 text-xs text-ink-3" style={{ animationDelay: "0.26s" }}>
-            <div className="h-px flex-1 bg-line" />o<div className="h-px flex-1 bg-line" />
+            <p className="animate-auth-up mt-6.5 text-center text-[13px] text-ink-3" style={{ animationDelay: "0.34s" }}>
+              {mode === "login" ? (
+                <>
+                  ¿Nuevo aquí?{" "}
+                  <button
+                    type="button"
+                    onClick={() => switchMode("signup")}
+                    className="font-semibold text-ink underline-offset-4 hover:underline"
+                  >
+                    Crea tu cuenta
+                  </button>
+                </>
+              ) : (
+                <>
+                  ¿Ya tienes cuenta?{" "}
+                  <button
+                    type="button"
+                    onClick={() => switchMode("login")}
+                    className="font-semibold text-ink underline-offset-4 hover:underline"
+                  >
+                    Inicia sesión
+                  </button>
+                </>
+              )}
+            </p>
           </div>
-
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isGooglePending}
-            onClick={() => startGoogleTransition(() => signInWithGoogle())}
-            className="animate-auth-up h-auto w-full gap-2 py-3 text-sm"
-            style={{ animationDelay: "0.3s" }}
-          >
-            <GoogleIcon className="size-4" />
-            {mode === "login" ? "Continuar con Google" : "Registrarse con Google"}
-          </Button>
-
-          <p className="animate-auth-up mt-6.5 text-center text-[13px] text-ink-3" style={{ animationDelay: "0.34s" }}>
-            {mode === "login" ? (
-              <>
-                ¿Nuevo aquí?{" "}
-                <button
-                  type="button"
-                  onClick={() => switchMode("signup")}
-                  className="font-semibold text-ink underline-offset-4 hover:underline"
-                >
-                  Crea tu cuenta
-                </button>
-              </>
-            ) : (
-              <>
-                ¿Ya tienes cuenta?{" "}
-                <button
-                  type="button"
-                  onClick={() => switchMode("login")}
-                  className="font-semibold text-ink underline-offset-4 hover:underline"
-                >
-                  Inicia sesión
-                </button>
-              </>
-            )}
-          </p>
-        </div>
+        )}
       </div>
     </div>
   );

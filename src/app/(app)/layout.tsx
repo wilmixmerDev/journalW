@@ -10,6 +10,7 @@ import { TradeDetailSheet } from "@/components/trades/trade-detail-sheet";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const configured = isSupabaseConfigured();
   let email: string | null = null;
+  let displayName: string | null = null;
   let isAdmin = false;
 
   if (configured) {
@@ -22,18 +23,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     if (user) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, first_name, last_name")
         .eq("id", user.id)
         .single();
       isAdmin = profile?.role === "admin";
+      const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ");
+      displayName = fullName || null;
     }
   }
 
   return (
     <div className="flex min-h-screen w-full">
-      <Sidebar email={email} isDemo={!configured} isAdmin={isAdmin} />
+      <Sidebar email={email} displayName={displayName} isDemo={!configured} isAdmin={isAdmin} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <MobileHeader email={email} isAdmin={isAdmin} />
+        <MobileHeader email={email} displayName={displayName} isAdmin={isAdmin} />
         <main className="flex-1 pb-20 lg:pb-0">
           <PageTransition>{children}</PageTransition>
         </main>

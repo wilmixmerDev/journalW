@@ -3,7 +3,7 @@ import type { Database } from "@/types/supabase";
 export type Direction = "long" | "short";
 export type JournalType = "live" | "backtest";
 export type TradeStatus = "open" | "closed";
-export type ResultType = "tp" | "sl";
+export type ResultType = "tp" | "sl" | "be";
 export type Quality = "a_plus" | "a" | "b" | "c" | "d";
 export type ScreenshotCategory = "before" | "after";
 

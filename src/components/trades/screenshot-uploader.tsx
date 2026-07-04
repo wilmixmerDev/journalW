@@ -53,8 +53,8 @@ export function ScreenshotUploader({ value, onChange }: ScreenshotUploaderProps)
     after: null,
   });
 
-  async function handleFiles(category: ScreenshotCategory, files: FileList | null) {
-    if (!files || files.length === 0) return;
+  async function handleFiles(category: ScreenshotCategory, files: File[]) {
+    if (files.length === 0) return;
     if (!configured) {
       toast.warning("Conecta Supabase para subir capturas.");
       return;
@@ -73,7 +73,7 @@ export function ScreenshotUploader({ value, onChange }: ScreenshotUploaderProps)
       }
 
       const uploaded: TradeScreenshot[] = [];
-      for (const file of Array.from(files)) {
+      for (const file of files) {
         const compressed = await compressImage(file);
         const path = `${user.id}/${crypto.randomUUID()}-${category}.jpg`;
         const { error } = await supabase.storage
@@ -126,8 +126,12 @@ export function ScreenshotUploader({ value, onChange }: ScreenshotUploaderProps)
                 multiple
                 className="hidden"
                 onChange={(e) => {
-                  void handleFiles(cat.value, e.target.files);
+                  // Snapshot before clearing: FileList is a live collection,
+                  // so resetting `value` first would empty it out from under
+                  // the async upload.
+                  const files = Array.from(e.target.files ?? []);
                   e.target.value = "";
+                  void handleFiles(cat.value, files);
                 }}
               />
               {shots.length > 0 ? (

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, Shield } from "lucide-react";
+import { LogOut, Shield, Settings } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -10,11 +10,17 @@ import { signOut } from "@/app/(app)/actions";
 
 interface MobileHeaderProps {
   email: string | null;
+  displayName: string | null;
   isAdmin: boolean;
 }
 
-export function MobileHeader({ email, isAdmin }: MobileHeaderProps) {
-  const initials = (email ?? "JW").slice(0, 2).toUpperCase();
+export function MobileHeader({ email, displayName, isAdmin }: MobileHeaderProps) {
+  const initials = (displayName ?? email ?? "JW")
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-line bg-surface/95 px-4 py-3 backdrop-blur lg:hidden">
@@ -31,6 +37,15 @@ export function MobileHeader({ email, isAdmin }: MobileHeaderProps) {
 
       <div className="flex items-center gap-0.5">
         <ThemeToggle />
+        <Button
+          render={<Link href="/settings" />}
+          nativeButton={false}
+          variant="ghost"
+          size="icon"
+          aria-label="Configuración"
+        >
+          <Settings className="size-4" />
+        </Button>
         {isAdmin ? (
           <Button
             render={<Link href="/admin" />}

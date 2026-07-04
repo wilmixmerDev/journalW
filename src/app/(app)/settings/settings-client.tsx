@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, type FieldPath } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { toast } from "sonner";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { COUNTRIES } from "@/lib/countries";
-import { completeOnboarding, skipOnboarding } from "./actions";
+import type { Profile } from "@/types/profile";
+import { updateOwnProfile } from "./actions";
 
 const MARKETS = ["Forex", "Cripto", "Índices", "Acciones", "Materias primas", "Futuros"];
 
@@ -45,10 +47,7 @@ const schema = z.object({
   firstName: z.string().min(1, "Requerido").regex(NAME_REGEX, "Solo puede contener letras"),
   lastName: z.string().min(1, "Requerido").regex(NAME_REGEX, "Solo puede contener letras"),
   phoneDial: z.string().min(1, "Requerido"),
-  phoneNumber: z
-    .string()
-    .min(5, "Requerido")
-    .regex(/^\d+$/, "Solo números"),
+  phoneNumber: z.string().min(5, "Requerido").regex(/^\d+$/, "Solo números"),
   country: z.string().min(1, "Requerido"),
   birthDate: z
     .string()
@@ -64,11 +63,6 @@ const schema = z.object({
 
 type FormValues = z.input<typeof schema>;
 
-const STEPS: { label: string; fields: FieldPath<FormValues>[] }[] = [
-  { label: "Información personal", fields: ["firstName", "lastName", "phoneDial", "phoneNumber", "country", "birthDate"] },
-  { label: "Tu operativa", fields: ["experienceLevel", "markets", "timezone"] },
-];
-
 const CHIP_CLASS =
   "inline-flex cursor-pointer items-center rounded-lg border border-line-2 bg-surface px-3.5 py-2 text-sm font-medium text-ink-2 transition-colors";
 const CHIP_ACTIVE_CLASS = "border-transparent bg-ink text-bg";
@@ -76,50 +70,49 @@ const CHIP_ACTIVE_CLASS = "border-transparent bg-ink text-bg";
 const SELECT_CLASS =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-ink outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive";
 
-export function OnboardingForm() {
-  const [step, setStep] = useState(0);
+function splitPhone(phone: string | null): { dial: string; number: string } {
+  if (!phone) return { dial: "", number: "" };
+  const [dial, ...rest] = phone.split(" ");
+  if (dial?.startsWith("+") && rest.length > 0) {
+    return { dial, number: rest.join("").replace(/\D/g, "") };
+  }
+  return { dial: "", number: phone.replace(/\D/g, "") };
+}
+
+interface SettingsClientProps {
+  profile: Profile;
+  email: string | null;
+}
+
+export function SettingsClient({ profile, email }: SettingsClientProps) {
   const [isPending, setIsPending] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [justAdvanced, setJustAdvanced] = useState(false);
+  const initialPhone = splitPhone(profile.phone);
 
   const {
     register,
     handleSubmit,
-    trigger,
     watch,
     setValue,
     getValues,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { markets: [], phoneDial: "" },
+    defaultValues: {
+      firstName: profile.firstName ?? "",
+      lastName: profile.lastName ?? "",
+      phoneDial: initialPhone.dial,
+      phoneNumber: initialPhone.number,
+      country: profile.country ?? "",
+      birthDate: profile.birthDate ?? "",
+      experienceLevel: profile.experienceLevel ?? undefined,
+      markets: profile.markets,
+      initialCapital: profile.initialCapital ?? undefined,
+      timezone: profile.timezone ?? "",
+    },
   });
 
-  const isLastStep = step === STEPS.length - 1;
   const markets = watch("markets") ?? [];
   const experienceLevel = watch("experienceLevel");
-
-  function cooldownAfterStepChange() {
-    // Guards against a rapid double-click landing on whichever button re-renders
-    // in the same spot (e.g. "Siguiente" turning into "Completar").
-    setJustAdvanced(true);
-    setTimeout(() => setJustAdvanced(false), 400);
-  }
-
-  async function goNext() {
-    if (justAdvanced) return;
-    const valid = await trigger(STEPS[step].fields);
-    if (valid) {
-      setStep((s) => Math.min(s + 1, STEPS.length - 1));
-      cooldownAfterStepChange();
-    }
-  }
-
-  function goBack() {
-    if (justAdvanced) return;
-    setStep((s) => Math.max(s - 1, 0));
-    cooldownAfterStepChange();
-  }
 
   function toggleMarket(market: string) {
     const checked = markets.includes(market);
@@ -144,10 +137,9 @@ export function OnboardingForm() {
 
   async function onSubmit(raw: FormValues) {
     const values = schema.parse(raw);
-    setServerError(null);
     setIsPending(true);
 
-    const { error } = await completeOnboarding({
+    const { error } = await updateOwnProfile({
       firstName: values.firstName.trim(),
       lastName: values.lastName.trim(),
       phone: `${values.phoneDial} ${values.phoneNumber}`,
@@ -159,77 +151,37 @@ export function OnboardingForm() {
       timezone: values.timezone,
     });
 
+    setIsPending(false);
     if (error) {
-      setServerError(error);
-      setIsPending(false);
+      toast.error(error);
       return;
     }
-
-    // A plain router.push() here can serve a stale client-cached redirect —
-    // /dashboard was repeatedly redirected back to this same page by the
-    // middleware before onboarding was completed. A full navigation forces a
-    // fresh middleware pass instead.
-    window.location.href = "/dashboard";
-  }
-
-  async function handleSkip() {
-    if (justAdvanced) return;
-    setServerError(null);
-    setIsPending(true);
-
-    const { error } = await skipOnboarding();
-    if (error) {
-      setServerError(error);
-      setIsPending(false);
-      return;
-    }
-
-    window.location.href = "/dashboard";
+    toast.success("Configuración guardada");
   }
 
   return (
-    <div className="w-full max-w-lg animate-fade-up">
-      <h1 className="font-serif text-4xl text-ink">Cuéntanos sobre ti</h1>
-      <p className="mt-2 text-sm text-ink-2">
-        Nos ayuda a personalizar tu experiencia. Puedes omitir este paso y completarlo después.
-      </p>
-
-      <div className="mt-6 space-y-1.5">
-        <div className="flex items-center justify-between text-xs text-ink-2">
-          <span>
-            Paso {step + 1} de {STEPS.length}: {STEPS[step].label}
-          </span>
-          <span className="font-mono">{Math.round(((step + 1) / STEPS.length) * 100)}%</span>
-        </div>
-        <Progress value={((step + 1) / STEPS.length) * 100} />
+    <div className="mx-auto max-w-2xl space-y-6 p-4 lg:p-8">
+      <div>
+        <h1 className="font-serif text-3xl text-ink">Configuración</h1>
+        <p className="text-sm text-ink-2">Edita tu información personal y de trading.</p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-5">
-        {serverError ? (
-          <p className="rounded-md border border-neg/30 bg-neg-soft px-3 py-2 text-xs text-neg">{serverError}</p>
-        ) : null}
-
-        {step === 0 ? (
-          <div className="animate-fade-in space-y-5">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <Card className="border-line bg-surface">
+          <CardHeader>
+            <CardTitle>Información personal</CardTitle>
+            <CardDescription>{email ?? ""}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="firstName">Nombre</Label>
-                <Input
-                  id="firstName"
-                  autoComplete="given-name"
-                  aria-invalid={Boolean(errors.firstName)}
-                  {...register("firstName")}
-                />
+                <Input id="firstName" aria-invalid={Boolean(errors.firstName)} {...register("firstName")} />
                 {errors.firstName ? <FieldError message={errors.firstName.message} /> : null}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="lastName">Apellido</Label>
-                <Input
-                  id="lastName"
-                  autoComplete="family-name"
-                  aria-invalid={Boolean(errors.lastName)}
-                  {...register("lastName")}
-                />
+                <Input id="lastName" aria-invalid={Boolean(errors.lastName)} {...register("lastName")} />
                 {errors.lastName ? <FieldError message={errors.lastName.message} /> : null}
               </div>
             </div>
@@ -238,7 +190,6 @@ export function OnboardingForm() {
               <Label htmlFor="country">País</Label>
               <select
                 id="country"
-                defaultValue=""
                 aria-invalid={Boolean(errors.country)}
                 className={SELECT_CLASS}
                 {...register("country", { onChange: onCountryChange })}
@@ -255,54 +206,57 @@ export function OnboardingForm() {
               {errors.country ? <FieldError message={errors.country.message} /> : null}
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="phoneNumber">Teléfono</Label>
-              <div className="flex gap-2">
-                <select
-                  aria-label="Código de país"
-                  aria-invalid={Boolean(errors.phoneDial)}
-                  className={cn(SELECT_CLASS, "w-32 shrink-0")}
-                  {...register("phoneDial")}
-                >
-                  <option value="" disabled>
-                    Código
-                  </option>
-                  {COUNTRIES.map((c) => (
-                    <option key={c.name} value={c.dial}>
-                      {c.name} ({c.dial})
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="phoneNumber">Teléfono</Label>
+                <div className="flex gap-2">
+                  <select
+                    aria-label="Código de país"
+                    aria-invalid={Boolean(errors.phoneDial)}
+                    className={cn(SELECT_CLASS, "w-28 shrink-0")}
+                    {...register("phoneDial")}
+                  >
+                    <option value="" disabled>
+                      Código
                     </option>
-                  ))}
-                </select>
-                <Input
-                  id="phoneNumber"
-                  type="tel"
-                  inputMode="numeric"
-                  autoComplete="tel-national"
-                  placeholder="3001234567"
-                  aria-invalid={Boolean(errors.phoneNumber)}
-                  {...register("phoneNumber", { onChange: keepDigitsOnly })}
-                />
+                    {COUNTRIES.map((c) => (
+                      <option key={c.name} value={c.dial}>
+                        {c.name} ({c.dial})
+                      </option>
+                    ))}
+                  </select>
+                  <Input
+                    id="phoneNumber"
+                    type="tel"
+                    inputMode="numeric"
+                    aria-invalid={Boolean(errors.phoneNumber)}
+                    {...register("phoneNumber", { onChange: keepDigitsOnly })}
+                  />
+                </div>
+                {errors.phoneDial ? <FieldError message={errors.phoneDial.message} /> : null}
+                {errors.phoneNumber ? <FieldError message={errors.phoneNumber.message} /> : null}
               </div>
-              {errors.phoneDial ? <FieldError message={errors.phoneDial.message} /> : null}
-              {errors.phoneNumber ? <FieldError message={errors.phoneNumber.message} /> : null}
+              <div className="space-y-1.5">
+                <Label htmlFor="birthDate">Fecha de nacimiento</Label>
+                <Input
+                  id="birthDate"
+                  type="date"
+                  max={todayISO()}
+                  aria-invalid={Boolean(errors.birthDate)}
+                  {...register("birthDate")}
+                />
+                {errors.birthDate ? <FieldError message={errors.birthDate.message} /> : null}
+              </div>
             </div>
+          </CardContent>
+        </Card>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="birthDate">Fecha de nacimiento</Label>
-              <Input
-                id="birthDate"
-                type="date"
-                max={todayISO()}
-                aria-invalid={Boolean(errors.birthDate)}
-                {...register("birthDate")}
-              />
-              {errors.birthDate ? <FieldError message={errors.birthDate.message} /> : null}
-            </div>
-          </div>
-        ) : null}
-
-        {step === 1 ? (
-          <div className="animate-fade-in space-y-5">
+        <Card className="border-line bg-surface">
+          <CardHeader>
+            <CardTitle>Tu operativa</CardTitle>
+            <CardDescription>Preferencias de trading para tus analíticas.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Nivel de experiencia</Label>
               <div className="flex flex-wrap gap-2">
@@ -346,7 +300,6 @@ export function OnboardingForm() {
                   inputMode="decimal"
                   min={0}
                   step="0.01"
-                  placeholder="10000"
                   {...register("initialCapital")}
                 />
               </div>
@@ -354,7 +307,6 @@ export function OnboardingForm() {
                 <Label htmlFor="timezone">Zona horaria</Label>
                 <select
                   id="timezone"
-                  defaultValue=""
                   aria-invalid={Boolean(errors.timezone)}
                   className={SELECT_CLASS}
                   {...register("timezone")}
@@ -371,29 +323,13 @@ export function OnboardingForm() {
                 {errors.timezone ? <FieldError message={errors.timezone.message} /> : null}
               </div>
             </div>
-          </div>
-        ) : null}
+          </CardContent>
+        </Card>
 
-        <div className="flex items-center justify-between gap-3 pt-2">
-          <div className="flex items-center gap-2">
-            {step > 0 ? (
-              <Button type="button" variant="outline" onClick={goBack} disabled={isPending}>
-                Atrás
-              </Button>
-            ) : null}
-            <Button type="button" variant="ghost" onClick={handleSkip} disabled={isPending}>
-              Omitir por ahora
-            </Button>
-          </div>
-          {isLastStep ? (
-            <Button type="submit" disabled={isPending}>
-              {isPending ? "Guardando..." : "Completar"}
-            </Button>
-          ) : (
-            <Button type="button" onClick={goNext} disabled={isPending}>
-              Siguiente
-            </Button>
-          )}
+        <div className="flex justify-end">
+          <Button type="submit" disabled={isPending}>
+            {isPending ? "Guardando..." : "Guardar cambios"}
+          </Button>
         </div>
       </form>
     </div>

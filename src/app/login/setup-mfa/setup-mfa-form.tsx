@@ -53,6 +53,14 @@ export function SetupMfaForm({ factorId, qrCode, secret }: SetupMfaFormProps) {
     verify(code);
   }
 
+  async function handleGoBack() {
+    // The session gates every route to this setup page, so "going back"
+    // means abandoning the half-created login and returning to /login.
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }
+
   return (
     <div className="w-full max-w-sm animate-fade-up">
       <h1 className="font-serif text-4xl text-ink">Activa la verificación en dos pasos</h1>
@@ -97,6 +105,9 @@ export function SetupMfaForm({ factorId, qrCode, secret }: SetupMfaFormProps) {
         </div>
         <Button type="submit" className="w-full" disabled={isPending || code.length < 6}>
           {isPending ? "Verificando..." : "Activar y continuar"}
+        </Button>
+        <Button type="button" variant="ghost" className="w-full" disabled={isPending} onClick={handleGoBack}>
+          ← Volver al inicio de sesión
         </Button>
       </form>
     </div>

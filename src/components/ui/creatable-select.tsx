@@ -33,6 +33,7 @@ interface CreatableSelectProps {
   onCreate?: (value: string) => void;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export function CreatableSelect({
@@ -42,6 +43,7 @@ export function CreatableSelect({
   onCreate,
   placeholder = "Selecciona",
   className,
+  disabled = false,
 }: CreatableSelectProps) {
   const [query, setQuery] = React.useState("");
 
@@ -72,10 +74,12 @@ export function CreatableSelect({
       onValueChange={handleValueChange}
       inputValue={query}
       onInputValueChange={setQuery}
+      disabled={disabled}
     >
       <Combobox.InputGroup
         className={cn(
           "flex h-8 w-full items-center gap-1 rounded-lg border border-input bg-transparent px-2.5 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30",
+          disabled && "pointer-events-none opacity-50",
           className
         )}
       >

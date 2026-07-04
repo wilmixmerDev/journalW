@@ -51,6 +51,13 @@ export function MfaForm({ factorId }: MfaFormProps) {
     verify(code);
   }
 
+  async function handleGoBack() {
+    // Abandon the half-finished login (AAL1 session) and return to /login.
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }
+
   return (
     <div className="w-full max-w-sm animate-fade-up">
       <h1 className="font-serif text-4xl text-ink">Verificación en dos pasos</h1>
@@ -82,6 +89,9 @@ export function MfaForm({ factorId }: MfaFormProps) {
         </div>
         <Button type="submit" className="w-full" disabled={isPending || code.length < 6}>
           {isPending ? "Verificando..." : "Verificar"}
+        </Button>
+        <Button type="button" variant="ghost" className="w-full" disabled={isPending} onClick={handleGoBack}>
+          ← Volver al inicio de sesión
         </Button>
       </form>
     </div>

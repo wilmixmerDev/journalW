@@ -53,7 +53,15 @@ export function TradeDetailSheet() {
                 <Stat label="Riesgo" value={`${trade.riskPercent}%`} />
                 <Stat
                   label="Resultado"
-                  value={trade.resultType === "tp" ? "Take Profit" : trade.resultType === "sl" ? "Stop Loss" : "—"}
+                  value={
+                    trade.resultType === "tp"
+                      ? "Take Profit"
+                      : trade.resultType === "sl"
+                        ? "Stop Loss"
+                        : trade.resultType === "be"
+                          ? "Break Even"
+                          : "—"
+                  }
                 />
                 <Stat label="Entrada" value={trade.entryPrice?.toString() ?? "—"} />
                 <Stat label="Stop" value={trade.stopPrice?.toString() ?? "—"} />

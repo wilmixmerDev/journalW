@@ -11,6 +11,7 @@ import {
   Plus,
   LogOut,
   Shield,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,14 +31,20 @@ const NAV_ITEMS = [
 
 interface SidebarProps {
   email: string | null;
+  displayName: string | null;
   isDemo: boolean;
   isAdmin: boolean;
 }
 
-export function Sidebar({ email, isDemo, isAdmin }: SidebarProps) {
+export function Sidebar({ email, displayName, isDemo, isAdmin }: SidebarProps) {
   const pathname = usePathname();
   const openNewTrade = useUIStore((s) => s.openNewTrade);
-  const initials = (email ?? "JW").slice(0, 2).toUpperCase();
+  const initials = (displayName ?? email ?? "JW")
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-line bg-surface lg:flex">
@@ -57,11 +64,10 @@ export function Sidebar({ email, isDemo, isAdmin }: SidebarProps) {
           <NavLink key={href} href={href} label={label} icon={icon} pathname={pathname} />
         ))}
 
+        <div className="my-2 border-t border-line" />
+        <NavLink href="/settings" label="Configuración" icon={Settings} pathname={pathname} />
         {isAdmin ? (
-          <>
-            <div className="my-2 border-t border-line" />
-            <NavLink href="/admin" label="Administración" icon={Shield} pathname={pathname} />
-          </>
+          <NavLink href="/admin" label="Administración" icon={Shield} pathname={pathname} />
         ) : null}
       </nav>
 
@@ -80,7 +86,12 @@ export function Sidebar({ email, isDemo, isAdmin }: SidebarProps) {
           <Avatar className="size-8">
             <AvatarFallback className="bg-surface-2 text-xs">{initials}</AvatarFallback>
           </Avatar>
-          <span className="flex-1 truncate text-xs text-ink-2">{email ?? "Cuenta demo"}</span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            {displayName ? (
+              <span className="truncate text-xs font-medium text-ink">{displayName}</span>
+            ) : null}
+            <span className="truncate text-[11px] text-ink-3">{email ?? "Cuenta demo"}</span>
+          </span>
           <ThemeToggle />
           <Button
             type="button"

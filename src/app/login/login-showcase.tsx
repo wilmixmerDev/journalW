@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 
 const PANEL_COUNT = 3;
 const PANEL_INTERVAL_MS = 3800;
@@ -15,15 +15,31 @@ function mulberry32(seed: number) {
   };
 }
 
-export function LoginShowcase() {
+export interface MfaSetupCardProps {
+  qrCode: string;
+  secret: string;
+  code: string;
+  error: string | null;
+  isPending: boolean;
+  onCodeChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}
+
+interface LoginShowcaseProps {
+  /** When set, the marketing carousel transitions into the 2FA setup card. */
+  mfaSetup?: MfaSetupCardProps | null;
+}
+
+export function LoginShowcase({ mfaSetup = null }: LoginShowcaseProps) {
   const [panel, setPanel] = useState(0);
 
   useEffect(() => {
+    if (mfaSetup) return;
     const timer = setInterval(() => {
       setPanel((p) => (p + 1) % PANEL_COUNT);
     }, PANEL_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, []);
+  }, [mfaSetup]);
 
   return (
     <div className="relative order-2 hidden flex-col justify-between overflow-hidden bg-[#141210] px-14 py-12 text-[#EDE8DE] lg:flex">
@@ -47,41 +63,101 @@ export function LoginShowcase() {
         <span className="font-serif text-[23px] tracking-tight">Journal W</span>
       </div>
 
-      <div className="relative max-w-[460px]">
-        <div className="mb-5 font-mono text-[11px] tracking-[.18em] text-[#C9A55F] uppercase">Trading Journal</div>
-        <h1 className="mb-7 font-serif text-[50px] leading-[1.05] font-normal tracking-tight">
-          No registres trades.
-          <br />
-          <span className="text-[#A39C8F] italic">Conviértete</span> en mejor trader.
-        </h1>
-
-        <div
-          className="animate-float-card rounded-[18px] border border-white/10 p-5 backdrop-blur-md"
-          style={{
-            background: "linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.02))",
-            boxShadow: "0 24px 60px rgba(0,0,0,.4)",
-          }}
-        >
-          <div className="h-[186px] overflow-hidden">
-            {panel === 1 ? <CalendarPanel /> : panel === 2 ? <FeedPanel /> : <EquityPanel />}
+      {mfaSetup ? (
+        <div key="mfa" className="relative max-w-[460px] animate-fade-up">
+          <div className="mb-5 font-mono text-[11px] tracking-[.18em] text-[#C9A55F] uppercase">
+            Verificación en dos pasos
           </div>
-          <div className="mt-3.5 flex justify-center gap-1.5">
-            {Array.from({ length: PANEL_COUNT }).map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                aria-label={`Panel ${i + 1}`}
-                onClick={() => setPanel(i)}
-                className="h-1.5 rounded-full transition-all duration-300"
-                style={{
-                  width: i === panel ? 18 : 6,
-                  background: i === panel ? "#C9A55F" : "rgba(255,255,255,.22)",
-                }}
+          <h1 className="mb-7 font-serif text-[38px] leading-[1.1] font-normal tracking-tight">
+            Escanea el código y<br />
+            <span className="text-[#A39C8F] italic">asegura</span> tu cuenta.
+          </h1>
+
+          <form
+            onSubmit={mfaSetup.onSubmit}
+            className="rounded-[18px] border border-white/10 p-6 backdrop-blur-md"
+            style={{
+              background: "linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.02))",
+              boxShadow: "0 24px 60px rgba(0,0,0,.4)",
+            }}
+          >
+            <div className="flex items-start gap-5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={mfaSetup.qrCode}
+                alt="Código QR para activar 2FA"
+                className="size-40 shrink-0 rounded-xl bg-white p-2"
               />
-            ))}
+              <div className="min-w-0 flex-1 space-y-3">
+                <p className="text-[12.5px] leading-relaxed text-[#A39C8F]">
+                  Escanéalo con Google Authenticator, Authy o tu app preferida. También puedes ingresar la clave manual:
+                </p>
+                <p className="rounded-md border border-white/10 bg-black/20 px-2.5 py-1.5 font-mono text-[10.5px] break-all text-[#C9A55F]">
+                  {mfaSetup.secret}
+                </p>
+              </div>
+            </div>
+
+            {mfaSetup.error ? (
+              <p className="mt-4 rounded-md border border-[#E08374]/40 bg-[#E08374]/10 px-3 py-2 text-xs text-[#E08374]">
+                {mfaSetup.error}
+              </p>
+            ) : null}
+
+            <div className="mt-4">
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                placeholder="Código de 6 dígitos"
+                autoFocus
+                value={mfaSetup.code}
+                onChange={mfaSetup.onCodeChange}
+                className="h-11 w-full rounded-lg border border-white/15 bg-black/20 px-3 text-center font-mono text-lg tracking-[.4em] text-[#EDE8DE] outline-none placeholder:font-sans placeholder:text-sm placeholder:tracking-normal placeholder:text-[#6B6458] focus:border-[#C9A55F]"
+              />
+              <p className="mt-2.5 text-center text-[11.5px] text-[#6B6458]">
+                {mfaSetup.isPending ? "Verificando..." : "Se verifica automáticamente al completar los 6 dígitos"}
+              </p>
+            </div>
+          </form>
+        </div>
+      ) : (
+        <div key="showcase" className="relative max-w-[460px]">
+          <div className="mb-5 font-mono text-[11px] tracking-[.18em] text-[#C9A55F] uppercase">Trading Journal</div>
+          <h1 className="mb-7 font-serif text-[50px] leading-[1.05] font-normal tracking-tight">
+            No registres trades.
+            <br />
+            <span className="text-[#A39C8F] italic">Conviértete</span> en mejor trader.
+          </h1>
+
+          <div
+            className="animate-float-card rounded-[18px] border border-white/10 p-5 backdrop-blur-md"
+            style={{
+              background: "linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.02))",
+              boxShadow: "0 24px 60px rgba(0,0,0,.4)",
+            }}
+          >
+            <div className="h-[186px] overflow-hidden">
+              {panel === 1 ? <CalendarPanel /> : panel === 2 ? <FeedPanel /> : <EquityPanel />}
+            </div>
+            <div className="mt-3.5 flex justify-center gap-1.5">
+              {Array.from({ length: PANEL_COUNT }).map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  aria-label={`Panel ${i + 1}`}
+                  onClick={() => setPanel(i)}
+                  className="h-1.5 rounded-full transition-all duration-300"
+                  style={{
+                    width: i === panel ? 18 : 6,
+                    background: i === panel ? "#C9A55F" : "rgba(255,255,255,.22)",
+                  }}
+                />
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="relative flex flex-wrap items-center gap-6">
         <div className="flex items-center gap-2.5 text-[12.5px] text-[#A39C8F]">
