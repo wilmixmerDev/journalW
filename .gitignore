@@ -32,12 +32,16 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.docker.example
 
 # vercel
 .vercel
 
-# supabase (private/local config)
-/supabase
+# supabase: only local CLI state is private; config.toml, migrations/ and
+# schema.sql are meant to be shared (no secrets — config.toml pulls those
+# from env vars).
+/supabase/.branches
+/supabase/.temp
 
 # typescript
 *.tsbuildinfo

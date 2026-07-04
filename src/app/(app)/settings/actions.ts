@@ -17,11 +17,7 @@ export interface ProfileUpdateInput {
   timezone: string | null;
 }
 
-/**
- * Regular users have no update policy on `profiles` (role/mfa_exempt are
- * admin-only), so this goes through the service-role client — but only ever
- * writes these informational columns, never role/mfa_exempt.
- */
+/** Uses the service-role client since regular users have no update policy on `profiles`. */
 export async function updateOwnProfile(input: ProfileUpdateInput): Promise<{ error: string | null }> {
   const supabase = await createClient();
   const {
@@ -42,7 +38,6 @@ export async function updateOwnProfile(input: ProfileUpdateInput): Promise<{ err
       markets: input.markets,
       initial_capital: input.initialCapital,
       timezone: input.timezone,
-      // If they filled this in from settings, the onboarding is complete too.
       onboarding_completed_at: new Date().toISOString(),
     })
     .eq("id", user.id);

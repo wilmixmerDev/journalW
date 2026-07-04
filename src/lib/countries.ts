@@ -1,7 +1,4 @@
-/**
- * Static country catalog (Spanish names + phone dial codes) for the
- * onboarding/settings forms. No external API needed.
- */
+/** Static country catalog (Spanish names + phone dial codes), no external API needed. */
 export interface Country {
   name: string;
   dial: string;

@@ -6,11 +6,7 @@ interface PageTransitionProps {
   children: React.ReactNode;
 }
 
-/**
- * Remounts (via `key`) on every route change so the fade-up entrance
- * animation reliably replays, instead of relying on Next.js's internal
- * reuse/streaming behavior to happen to remount the subtree.
- */
+/** Remounts on every route change (via `key`) so the fade-up animation replays. */
 export function PageTransition({ children }: PageTransitionProps) {
   const pathname = usePathname();
 

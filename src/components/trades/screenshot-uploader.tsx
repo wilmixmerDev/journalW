@@ -126,9 +126,7 @@ export function ScreenshotUploader({ value, onChange }: ScreenshotUploaderProps)
                 multiple
                 className="hidden"
                 onChange={(e) => {
-                  // Snapshot before clearing: FileList is a live collection,
-                  // so resetting `value` first would empty it out from under
-                  // the async upload.
+                  // FileList is live, so snapshot it before clearing the input.
                   const files = Array.from(e.target.files ?? []);
                   e.target.value = "";
                   void handleFiles(cat.value, files);

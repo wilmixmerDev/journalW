@@ -25,11 +25,7 @@ async function requireUserId() {
   return user.id;
 }
 
-/**
- * Regular users have no update policy on `profiles` (role/mfa_exempt are
- * admin-only), so this goes through the service-role client — but only ever
- * writes these specific onboarding columns, never role/mfa_exempt.
- */
+/** Uses the service-role client since regular users have no update policy on `profiles`. */
 export async function completeOnboarding(input: OnboardingInput): Promise<{ error: string | null }> {
   const userId = await requireUserId();
 

@@ -121,10 +121,7 @@ function computeOutcome(values: z.output<typeof schema>) {
 
 const EMPTY_OPTIONS: TradeOptionLists = { strategy: [], setupsByStrategy: {}, timeframe: [], tag: [] };
 
-/**
- * Distances between the plan prices, expressed in pips for Forex (0.0001,
- * or 0.01 for JPY pairs) and raw points for every other market.
- */
+/** Distance between plan prices, in pips for Forex or raw points otherwise. */
 function computePriceStats(
   market: string | undefined,
   instrument: string | undefined,
@@ -145,8 +142,7 @@ function computePriceStats(
 }
 
 function formatDistance(value: number) {
-  // Sub-1 distances (e.g. index points or a forex-style price entered under a
-  // non-forex market) would round to "0" with a fixed decimal count.
+  // Avoid rounding sub-1 distances down to "0".
   if (value > 0 && value < 1) {
     return value.toLocaleString("es", { maximumSignificantDigits: 3 });
   }
@@ -251,15 +247,12 @@ export function NewTradeDialog() {
   }
 
   function cooldownAfterStepChange() {
-    // Guards against a rapid double-click landing on whichever button re-renders
-    // in the same spot (e.g. "Siguiente" turning into "Guardar operación").
+    // Guards against a double-click hitting the button that re-renders in its place.
     setJustAdvanced(true);
     setTimeout(() => setJustAdvanced(false), 400);
   }
 
-  // Cross-field rules live in the schema's superRefine, but zod skips
-  // refinements while later-step required fields are still empty — so the
-  // same rules are enforced imperatively when advancing past their step.
+  // Mirrors the schema's superRefine, since zod skips it while later fields are empty.
   function validateStepCrossFields(): boolean {
     if (step === 1) {
       const r = Number(getValues("rMultiple"));

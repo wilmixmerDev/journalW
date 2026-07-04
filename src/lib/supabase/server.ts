@@ -19,8 +19,7 @@ export async function createClient() {
               cookieStore.set(name, value, options)
             );
           } catch {
-            // setAll called from a Server Component — ignored because
-            // session refresh is handled by proxy.ts instead.
+            // Called from a Server Component; proxy.ts handles the refresh instead.
           }
         },
       },

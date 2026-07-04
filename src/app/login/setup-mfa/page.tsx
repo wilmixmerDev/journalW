@@ -30,9 +30,7 @@ export default async function SetupMfaPage() {
     }
   }
 
-  // Clear out any unverified attempts from a previous visit so we always start
-  // from a clean slate, then enroll exactly once. From here on, verification
-  // happens entirely client-side so a wrong code never regenerates this QR.
+  // Clear stale unverified attempts before enrolling fresh each visit.
   await cleanUpUnverified();
   let { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({
     factorType: "totp",

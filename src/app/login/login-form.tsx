@@ -29,8 +29,7 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
   const [error, setError] = useState<string | null>(errorMessage ?? null);
   const [notice, setNotice] = useState<string | null>(initialNotice ?? null);
 
-  // Post-signup inline 2FA enrollment: the right showcase panel transitions
-  // into the QR setup card so account creation feels like one continuous flow.
+  // Post-signup 2FA enrollment, rendered inline in the showcase panel.
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaError, setMfaError] = useState<string | null>(null);
@@ -125,8 +124,7 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
     }
 
     if (enrollError || !data) {
-      // Fall back to the standalone setup page (the middleware sends the
-      // session there anyway on the next navigation).
+      // Fall back to the standalone setup page.
       window.location.href = "/login/setup-mfa";
       return null;
     }

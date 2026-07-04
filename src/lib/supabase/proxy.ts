@@ -3,8 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export async function updateSession(request: NextRequest) {
-  // No real Supabase project yet — skip auth enforcement instead of calling
-  // out to a placeholder host on every request. The app runs in demo mode.
+  // Demo mode: no Supabase configured, so skip auth enforcement entirely.
   if (!isSupabaseConfigured()) {
     return NextResponse.next({ request });
   }

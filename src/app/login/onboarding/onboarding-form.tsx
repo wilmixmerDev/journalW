@@ -100,8 +100,7 @@ export function OnboardingForm() {
   const experienceLevel = watch("experienceLevel");
 
   function cooldownAfterStepChange() {
-    // Guards against a rapid double-click landing on whichever button re-renders
-    // in the same spot (e.g. "Siguiente" turning into "Completar").
+    // Guards against a double-click hitting the button that re-renders in its place.
     setJustAdvanced(true);
     setTimeout(() => setJustAdvanced(false), 400);
   }
@@ -165,10 +164,7 @@ export function OnboardingForm() {
       return;
     }
 
-    // A plain router.push() here can serve a stale client-cached redirect —
-    // /dashboard was repeatedly redirected back to this same page by the
-    // middleware before onboarding was completed. A full navigation forces a
-    // fresh middleware pass instead.
+    // Full navigation avoids a stale client-cached redirect to this page.
     window.location.href = "/dashboard";
   }
 

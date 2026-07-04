@@ -54,8 +54,7 @@ export function SetupMfaForm({ factorId, qrCode, secret }: SetupMfaFormProps) {
   }
 
   async function handleGoBack() {
-    // The session gates every route to this setup page, so "going back"
-    // means abandoning the half-created login and returning to /login.
+    // "Going back" means abandoning the half-created login.
     const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = "/login";
