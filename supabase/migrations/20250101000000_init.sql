@@ -144,6 +144,8 @@ alter table public.profiles add column if not exists markets text[] not null def
 alter table public.profiles add column if not exists initial_capital numeric;
 alter table public.profiles add column if not exists timezone text;
 alter table public.profiles add column if not exists onboarding_completed_at timestamptz;
+-- Verificación obligatoria de 2FA por correo (el TOTP queda como factor opcional adicional).
+alter table public.profiles add column if not exists email_mfa_verified_at timestamptz;
 
 grant select, insert, update on public.profiles to anon, authenticated, service_role;
 
@@ -195,3 +197,38 @@ create policy "trade_screenshots_delete_own" on storage.objects
   for delete using (
     bucket_id = 'trade-screenshots' and auth.uid()::text = (storage.foldername(name))[1]
   );
+
+-- Códigos de un solo uso para el 2FA por correo (registro, login, cambios sensibles en Configuración).
+-- Sin políticas RLS a propósito: solo el service_role (que salta RLS) debe tocar esta tabla.
+create table if not exists public.mfa_email_codes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  code_hash text not null,
+  purpose text not null check (purpose in ('enroll', 'login', 'security')),
+  attempts int not null default 0,
+  expires_at timestamptz not null,
+  consumed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists mfa_email_codes_user_purpose_idx on public.mfa_email_codes (user_id, purpose, created_at desc);
+
+alter table public.mfa_email_codes enable row level security;
+revoke all on public.mfa_email_codes from anon, authenticated;
+grant select, insert, update, delete on public.mfa_email_codes to service_role;
+
+-- Marca "ya verificó su 2FA en esta sesión", equivalente casero al AAL2 nativo de Supabase.
+create table if not exists public.mfa_email_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  token_hash text not null,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists mfa_email_sessions_token_idx on public.mfa_email_sessions (token_hash);
+create index if not exists mfa_email_sessions_user_idx on public.mfa_email_sessions (user_id);
+
+alter table public.mfa_email_sessions enable row level security;
+revoke all on public.mfa_email_sessions from anon, authenticated;
+grant select, insert, update, delete on public.mfa_email_sessions to service_role;

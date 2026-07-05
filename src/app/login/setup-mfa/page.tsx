@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { sendEmailOtp } from "@/lib/mfa/email-otp";
 import { SetupMfaForm } from "./setup-mfa-form";
 
 export const metadata: Metadata = {
@@ -13,52 +14,23 @@ export default async function SetupMfaPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user?.email) redirect("/login");
 
-  const { data: existing } = await supabase.auth.mfa.listFactors();
-  if (existing && existing.totp.length > 0) {
-    redirect("/dashboard");
-  }
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("email_mfa_verified_at")
+    .eq("id", user.id)
+    .single();
 
-  async function cleanUpUnverified() {
-    const { data } = await supabase.auth.mfa.listFactors();
-    if (!data) return;
-    for (const factor of data.all) {
-      if (factor.factor_type === "totp" && factor.status === "unverified") {
-        await supabase.auth.mfa.unenroll({ factorId: factor.id });
-      }
-    }
-  }
+  // El correo obligatorio ya está verificado (no debería llegar aquí salvo carrera rara) — nada que hacer.
+  if (profile?.email_mfa_verified_at) redirect("/dashboard");
 
-  // Limpia intentos no verificados de antes, para inscribir uno nuevo en cada visita.
-  await cleanUpUnverified();
-  let { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({
-    factorType: "totp",
-    friendlyName: "Authenticator",
-  });
-
-  if (enrollError?.message.includes("already exists")) {
-    // Carrera muy rara con una petición concurrente del mismo usuario — reintenta una vez.
-    await cleanUpUnverified();
-    ({ data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({
-      factorType: "totp",
-      friendlyName: "Authenticator",
-    }));
-  }
-
-  if (enrollError || !enrollData) {
-    redirect(
-      `/login?error=${encodeURIComponent(enrollError?.message ?? "No se pudo iniciar la activación de 2FA.")}`
-    );
-  }
+  // Manda el primer código del correo obligatorio de una vez; el autenticador queda como paso opcional después.
+  await sendEmailOtp(user.id, user.email, "enroll");
 
   return (
     <div className="flex min-h-screen items-center justify-center px-6">
-      <SetupMfaForm
-        factorId={enrollData.id}
-        qrCode={enrollData.totp.qr_code}
-        secret={enrollData.totp.secret}
-      />
+      <SetupMfaForm email={user.email} />
     </div>
   );
 }

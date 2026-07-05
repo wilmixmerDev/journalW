@@ -21,5 +21,8 @@ export default async function SettingsPage() {
   const { data: row } = await supabase.from("profiles").select("*").eq("id", user.id).single();
   if (!row) redirect("/dashboard");
 
-  return <SettingsClient profile={profileFromRow(row)} email={user.email ?? null} />;
+  const { data: factorsData } = await supabase.auth.mfa.listFactors();
+  const hasTotp = Boolean(factorsData && factorsData.totp.length > 0);
+
+  return <SettingsClient profile={profileFromRow(row)} email={user.email ?? null} hasTotp={hasTotp} />;
 }

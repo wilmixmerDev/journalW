@@ -18,6 +18,7 @@ export interface Profile {
   initialCapital: number | null;
   timezone: string | null;
   onboardingCompletedAt: string | null;
+  emailMfaVerifiedAt: string | null;
 }
 
 export function profileFromRow(row: ProfileRow): Profile {
@@ -35,5 +36,6 @@ export function profileFromRow(row: ProfileRow): Profile {
     initialCapital: row.initial_capital,
     timezone: row.timezone,
     onboardingCompletedAt: row.onboarding_completed_at,
+    emailMfaVerifiedAt: row.email_mfa_verified_at,
   };
 }

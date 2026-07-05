@@ -112,6 +112,7 @@ export interface Database {
           initial_capital: number | null;
           timezone: string | null;
           onboarding_completed_at: string | null;
+          email_mfa_verified_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -129,10 +130,53 @@ export interface Database {
           initial_capital?: number | null;
           timezone?: string | null;
           onboarding_completed_at?: string | null;
+          email_mfa_verified_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;
+        Relationships: [];
+      };
+      mfa_email_codes: {
+        Row: {
+          id: string;
+          user_id: string;
+          code_hash: string;
+          purpose: "enroll" | "login" | "security";
+          attempts: number;
+          expires_at: string;
+          consumed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          code_hash: string;
+          purpose: "enroll" | "login" | "security";
+          attempts?: number;
+          expires_at: string;
+          consumed_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mfa_email_codes"]["Insert"]>;
+        Relationships: [];
+      };
+      mfa_email_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          token_hash: string;
+          expires_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          token_hash: string;
+          expires_at: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mfa_email_sessions"]["Insert"]>;
         Relationships: [];
       };
     };

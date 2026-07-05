@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { COUNTRIES } from "@/lib/countries";
+import { SecurityCard } from "@/components/settings/security-card";
 import type { Profile } from "@/types/profile";
 import { updateOwnProfile } from "./actions";
 
@@ -82,9 +83,10 @@ function splitPhone(phone: string | null): { dial: string; number: string } {
 interface SettingsClientProps {
   profile: Profile;
   email: string | null;
+  hasTotp: boolean;
 }
 
-export function SettingsClient({ profile, email }: SettingsClientProps) {
+export function SettingsClient({ profile, email, hasTotp }: SettingsClientProps) {
   const [isPending, setIsPending] = useState(false);
   const initialPhone = splitPhone(profile.phone);
 
@@ -165,6 +167,8 @@ export function SettingsClient({ profile, email }: SettingsClientProps) {
         <h1 className="font-serif text-3xl text-ink">Configuración</h1>
         <p className="text-sm text-ink-2">Edita tu información personal y de trading.</p>
       </div>
+
+      <SecurityCard emailMfaVerifiedAt={profile.emailMfaVerifiedAt} hasTotp={hasTotp} />
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card className="border-line bg-surface">

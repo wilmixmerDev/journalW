@@ -2,15 +2,22 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { EMAIL_MFA_SESSION_COOKIE, revokeEmailMfaSessions } from "@/lib/mfa/email-otp";
 import { tradeToInsert, type JournalType, type Trade, type TradeOptionKind } from "@/types/trade";
 
 export async function signOut() {
   if (isSupabaseConfigured()) {
     const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) await revokeEmailMfaSessions(user.id);
     await supabase.auth.signOut();
   }
+  (await cookies()).delete(EMAIL_MFA_SESSION_COOKIE);
   redirect("/login");
 }
 

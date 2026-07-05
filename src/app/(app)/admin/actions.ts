@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { revokeEmailMfaSessions } from "@/lib/mfa/email-otp";
 
 export interface AdminUserRow {
   id: string;
@@ -74,9 +75,10 @@ export async function disableUserMfa(userId: string): Promise<{ error: string | 
     if (deleteError) return { error: deleteError.message };
   }
 
+  await revokeEmailMfaSessions(userId);
   const { error: exemptError } = await admin
     .from("profiles")
-    .update({ mfa_exempt: true })
+    .update({ mfa_exempt: true, email_mfa_verified_at: null })
     .eq("id", userId);
   if (exemptError) return { error: exemptError.message };
 
@@ -89,7 +91,11 @@ export async function requireUserMfa(userId: string): Promise<{ error: string | 
   if (!caller) return { error: "No autorizado." };
 
   const admin = createAdminClient();
-  const { error } = await admin.from("profiles").update({ mfa_exempt: false }).eq("id", userId);
+  await revokeEmailMfaSessions(userId);
+  const { error } = await admin
+    .from("profiles")
+    .update({ mfa_exempt: false, email_mfa_verified_at: null })
+    .eq("id", userId);
   if (error) return { error: error.message };
 
   return { error: null };

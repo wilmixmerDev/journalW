@@ -7,18 +7,16 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
-import { signInWithGoogle } from "./actions";
+import { EmailOtpChallenge } from "@/components/mfa/email-otp-challenge";
+import { enrollTotp, type TotpEnrollment } from "@/lib/mfa/enroll-totp";
+import { signInWithGoogle, sendAuthEmailOtp, verifyAuthEmailOtp } from "./actions";
 import { LoginShowcase, type MfaSetupCardProps } from "./login-showcase";
+
+type SignupStage = "credentials" | "email-otp" | "totp-offer" | "totp-enroll";
 
 interface LoginFormProps {
   errorMessage?: string;
   notice?: string;
-}
-
-interface Enrollment {
-  factorId: string;
-  qrCode: string;
-  secret: string;
 }
 
 export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProps) {
@@ -29,8 +27,10 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
   const [error, setError] = useState<string | null>(errorMessage ?? null);
   const [notice, setNotice] = useState<string | null>(initialNotice ?? null);
 
-  // Configuración de 2FA post-registro, mostrada dentro del panel de showcase.
-  const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
+  // Post-registro: correo obligatorio primero, autenticador opcional después (mostrado en el panel de showcase).
+  const [signupStage, setSignupStage] = useState<SignupStage>("credentials");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [enrollment, setEnrollment] = useState<TotpEnrollment | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaError, setMfaError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -61,12 +61,7 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
         return;
       }
 
-      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (aal && aal.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
-        router.push("/login/mfa");
-        return;
-      }
-
+      // El middleware decide si hace falta pasar por /login/mfa (TOTP y/o correo) antes del dashboard.
       router.push("/dashboard");
       router.refresh();
       return;
@@ -87,9 +82,14 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
     }
 
     if (data.session) {
-      const enrolled = await enrollTotp();
+      const { error: otpError } = await sendAuthEmailOtp("enroll");
       setIsPending(false);
-      if (enrolled) setEnrollment(enrolled);
+      if (otpError) {
+        setError(otpError);
+        return;
+      }
+      setSignupEmail(email);
+      setSignupStage("email-otp");
       return;
     }
 
@@ -97,39 +97,24 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
     setIsPending(false);
   }
 
-  async function enrollTotp(): Promise<Enrollment | null> {
-    const supabase = createClient();
+  async function handleEmailOtpVerified() {
+    setSignupStage("totp-offer");
+  }
 
-    async function cleanUpUnverified() {
-      const { data } = await supabase.auth.mfa.listFactors();
-      for (const factor of data?.all ?? []) {
-        if (factor.factor_type === "totp" && factor.status === "unverified") {
-          await supabase.auth.mfa.unenroll({ factorId: factor.id });
-        }
-      }
-    }
-
-    await cleanUpUnverified();
-    let { data, error: enrollError } = await supabase.auth.mfa.enroll({
-      factorType: "totp",
-      friendlyName: "Authenticator",
-    });
-
-    if (enrollError?.message.includes("already exists")) {
-      await cleanUpUnverified();
-      ({ data, error: enrollError } = await supabase.auth.mfa.enroll({
-        factorType: "totp",
-        friendlyName: "Authenticator",
-      }));
-    }
-
-    if (enrollError || !data) {
+  async function handleActivateTotp() {
+    const enrolled = await enrollTotp(createClient());
+    if (enrolled) {
+      setEnrollment(enrolled);
+      setSignupStage("totp-enroll");
+    } else {
       // Recae en la página de configuración independiente.
       window.location.href = "/login/setup-mfa";
-      return null;
     }
+  }
 
-    return { factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret };
+  function skipTotp() {
+    // Navegación completa para que el middleware reevalúe la sesión ya verificada por correo.
+    window.location.href = "/login/onboarding";
   }
 
   async function verifyMfa(currentCode: string) {
@@ -166,6 +151,8 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
   async function abandonSignup() {
     const supabase = createClient();
     await supabase.auth.signOut();
+    setSignupStage("credentials");
+    setSignupEmail("");
     setEnrollment(null);
     setMfaCode("");
     setMfaError(null);
@@ -192,16 +179,56 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
       <LoginShowcase mfaSetup={mfaSetup} />
 
       <div className="theme-force-light order-1 flex items-center justify-center bg-surface px-6 py-16 text-ink">
-        {enrollment ? (
+        {signupStage === "email-otp" ? (
           <div className="w-full max-w-[360px] animate-fade-up">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-pos/30 bg-pos-soft px-3 py-1 text-xs font-semibold text-pos">
               <span className="size-1.5 rounded-full bg-pos" />
               Cuenta creada
             </div>
-            <h2 className="mb-1.5 font-serif text-[32px] font-normal">Un último paso</h2>
+            <h2 className="mb-1.5 font-serif text-[32px] font-normal">Verifica tu correo</h2>
             <p className="mb-6 text-sm text-ink-2">
-              Por seguridad, Journal W requiere una app autenticadora (Google Authenticator, Authy...).
-              <span className="hidden lg:inline"> Escanea el código QR del panel derecho y escribe el código de 6 dígitos.</span>
+              Por seguridad, Journal W requiere verificar tu correo antes de continuar.
+            </p>
+            <EmailOtpChallenge
+              email={signupEmail}
+              onVerify={(code) => verifyAuthEmailOtp(code, "enroll")}
+              onResend={() => sendAuthEmailOtp("enroll")}
+              onVerified={handleEmailOtpVerified}
+            />
+            <Button type="button" variant="ghost" className="mt-2 w-full" onClick={abandonSignup}>
+              ← Volver al inicio de sesión
+            </Button>
+          </div>
+        ) : signupStage === "totp-offer" ? (
+          <div className="w-full max-w-[360px] animate-fade-up">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-pos/30 bg-pos-soft px-3 py-1 text-xs font-semibold text-pos">
+              <span className="size-1.5 rounded-full bg-pos" />
+              Correo verificado
+            </div>
+            <h2 className="mb-1.5 font-serif text-[32px] font-normal">¿Inicio de sesión más rápido?</h2>
+            <p className="mb-6 text-sm text-ink-2">
+              Ya tienes 2FA por correo activo. Si quieres, activa también una app autenticadora
+              (Google Authenticator, Authy...) para verificarte más rápido en cada inicio de sesión.
+            </p>
+            <div className="space-y-2">
+              <Button type="button" className="w-full" onClick={handleActivateTotp}>
+                Activar app autenticadora
+              </Button>
+              <Button type="button" variant="outline" className="w-full" onClick={skipTotp}>
+                Ahora no
+              </Button>
+            </div>
+          </div>
+        ) : enrollment ? (
+          <div className="w-full max-w-[360px] animate-fade-up">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-pos/30 bg-pos-soft px-3 py-1 text-xs font-semibold text-pos">
+              <span className="size-1.5 rounded-full bg-pos" />
+              Correo verificado
+            </div>
+            <h2 className="mb-1.5 font-serif text-[32px] font-normal">Activa tu autenticador</h2>
+            <p className="mb-6 text-sm text-ink-2">
+              Escanea el código QR con tu app autenticadora (Google Authenticator, Authy...).
+              <span className="hidden lg:inline"> Lo ves también en el panel derecho.</span>
             </p>
 
             {/* On mobile the dark showcase panel doesn't exist, so the QR card renders here. */}
@@ -227,8 +254,8 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
               </div>
             </div>
 
-            <Button type="button" variant="ghost" className="w-full" disabled={isVerifying} onClick={abandonSignup}>
-              ← Volver al inicio de sesión
+            <Button type="button" variant="ghost" className="w-full" disabled={isVerifying} onClick={skipTotp}>
+              Omitir y continuar
             </Button>
           </div>
         ) : (
