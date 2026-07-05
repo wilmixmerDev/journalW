@@ -6,7 +6,7 @@ import { profileFromRow } from "@/types/profile";
 import { SettingsClient } from "./settings-client";
 
 export const metadata: Metadata = {
-  title: "Configuración — Journal W",
+  title: "Configuración",
 };
 
 export default async function SettingsPage() {

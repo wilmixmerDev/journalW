@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { SetupMfaForm } from "./setup-mfa-form";
 
 export const metadata: Metadata = {
-  title: "Activa la verificación en dos pasos — Journal W",
+  title: "Activa la verificación en dos pasos",
 };
 
 export default async function SetupMfaPage() {

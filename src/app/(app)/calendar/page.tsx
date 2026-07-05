@@ -3,7 +3,7 @@ import { getAllJournals } from "@/lib/trades-data";
 import { CalendarClient } from "./calendar-client";
 
 export const metadata: Metadata = {
-  title: "Calendario — Journal W",
+  title: "Calendario",
 };
 
 export default async function CalendarPage() {

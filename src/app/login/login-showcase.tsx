@@ -57,9 +57,8 @@ export function LoginShowcase({ mfaSetup = null }: LoginShowcaseProps) {
       />
 
       <div className="relative flex items-center gap-2.5">
-        <div className="flex size-[30px] items-center justify-center rounded-lg bg-[#C9A55F]">
-          <div className="size-[11px] rotate-[-45deg] rounded-[50%_50%_50%_0] border-2 border-[#141210]" />
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/icon-dark.svg" alt="" className="size-[30px] shrink-0" />
         <span className="font-serif text-[23px] tracking-tight">Journal W</span>
       </div>
 

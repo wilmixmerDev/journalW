@@ -6,7 +6,7 @@ import { listUsersForAdmin } from "./actions";
 import { AdminClient } from "./admin-client";
 
 export const metadata: Metadata = {
-  title: "Administración — Journal W",
+  title: "Administración",
 };
 
 export default async function AdminPage() {

@@ -3,7 +3,7 @@ import { getAllJournals } from "@/lib/trades-data";
 import { AnalyticsClient } from "./analytics-client";
 
 export const metadata: Metadata = {
-  title: "Analíticas — Journal W",
+  title: "Analíticas",
 };
 
 export default async function AnalyticsPage() {

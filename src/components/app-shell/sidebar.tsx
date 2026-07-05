@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { JournalSwitch } from "@/components/app-shell/journal-switch";
 import { useUIStore } from "@/store/ui-store";
@@ -49,9 +50,7 @@ export function Sidebar({ email, displayName, isDemo, isAdmin }: SidebarProps) {
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-line bg-surface lg:flex">
       <div className="flex items-center gap-2 px-6 py-6">
-        <span className="flex size-8 items-center justify-center rounded-lg bg-ink">
-          <span className="size-3.5 rounded-full border-2 border-bg" />
-        </span>
+        <BrandMark className="size-8" />
         <span className="font-serif text-xl text-ink">Journal W</span>
       </div>
 

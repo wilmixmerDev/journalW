@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { OnboardingForm } from "./onboarding-form";
 
 export const metadata: Metadata = {
-  title: "Cuéntanos sobre tu operativa — Journal W",
+  title: "Cuéntanos sobre tu operativa",
 };
 
 export default async function OnboardingPage() {

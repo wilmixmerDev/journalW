@@ -4,6 +4,7 @@ import Link from "next/link";
 import { LogOut, Shield, Settings } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { JournalSwitch } from "@/components/app-shell/journal-switch";
 import { signOut } from "@/app/(app)/actions";
@@ -25,9 +26,7 @@ export function MobileHeader({ email, displayName, isAdmin }: MobileHeaderProps)
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-line bg-surface/95 px-4 py-3 backdrop-blur lg:hidden">
       <div className="flex items-center gap-2">
-        <span className="flex size-7 items-center justify-center rounded-lg bg-ink">
-          <span className="size-3 rounded-full border-[1.5px] border-bg" />
-        </span>
+        <BrandMark className="size-7" />
         <span className="font-serif text-lg text-ink">Journal W</span>
       </div>
 

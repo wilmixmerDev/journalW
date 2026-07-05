@@ -3,7 +3,7 @@ import { getAllJournals } from "@/lib/trades-data";
 import { TradesClient } from "./trades-client";
 
 export const metadata: Metadata = {
-  title: "Operaciones — Journal W",
+  title: "Operaciones",
 };
 
 export default async function TradesPage() {

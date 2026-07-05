@@ -3,7 +3,7 @@ import { getAllJournals } from "@/lib/trades-data";
 import { DashboardClient } from "./dashboard-client";
 
 export const metadata: Metadata = {
-  title: "Dashboard — Journal W",
+  title: "Dashboard",
 };
 
 export default async function DashboardPage() {
