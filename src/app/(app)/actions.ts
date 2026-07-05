@@ -41,6 +41,66 @@ export async function createTrade(input: Omit<Trade, "id" | "userId" | "createdA
   return { error: null };
 }
 
+export async function updateTrade(
+  id: string,
+  input: Omit<Trade, "id" | "userId" | "createdAt" | "updatedAt">
+) {
+  if (!isSupabaseConfigured()) {
+    return { error: "Conecta Supabase para guardar operaciones reales. Por ahora estás en modo demo." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Debes iniciar sesión para editar una operación." };
+  }
+
+  const { error } = await supabase
+    .from("trades")
+    .update(tradeToInsert({ ...input, userId: user.id }))
+    .eq("id", id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/trades");
+  revalidatePath("/analytics");
+  revalidatePath("/calendar");
+  return { error: null };
+}
+
+export async function deleteTrade(id: string) {
+  if (!isSupabaseConfigured()) {
+    return { error: "Conecta Supabase para eliminar operaciones reales. Por ahora estás en modo demo." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Debes iniciar sesión para eliminar una operación." };
+  }
+
+  const { error } = await supabase.from("trades").delete().eq("id", id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/trades");
+  revalidatePath("/analytics");
+  revalidatePath("/calendar");
+  return { error: null };
+}
+
 export interface TradeOptionLists {
   strategy: string[];
   setupsByStrategy: Record<string, string[]>;

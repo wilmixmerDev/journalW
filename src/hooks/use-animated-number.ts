@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-/** Smoothly tweens a displayed number toward `value` instead of jumping instantly. */
+/** Anima suavemente el número mostrado hacia `value` en vez de saltar de golpe. */
 export function useAnimatedNumber(value: number, duration = 350): number {
   const [display, setDisplay] = useState(value);
   const fromRef = useRef(value);

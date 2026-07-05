@@ -100,7 +100,7 @@ export function OnboardingForm() {
   const experienceLevel = watch("experienceLevel");
 
   function cooldownAfterStepChange() {
-    // Guards against a double-click hitting the button that re-renders in its place.
+    // Evita que un doble clic golpee el botón que se re-renderiza en su lugar.
     setJustAdvanced(true);
     setTimeout(() => setJustAdvanced(false), 400);
   }
@@ -164,7 +164,7 @@ export function OnboardingForm() {
       return;
     }
 
-    // Full navigation avoids a stale client-cached redirect to this page.
+    // Navegación completa para evitar una redirección cacheada obsoleta hacia esta página.
     window.location.href = "/dashboard";
   }
 

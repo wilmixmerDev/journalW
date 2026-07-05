@@ -1,8 +1,8 @@
--- Journal W — base schema. Run on a fresh Supabase project.
+-- Journal W — schema base. Ejecutar en un proyecto de Supabase nuevo.
 
 create extension if not exists "pgcrypto";
 
--- Grants are separate from RLS below; without them, "permission denied" even if RLS allows it.
+-- Los grants son independientes de las políticas RLS de abajo; sin ellos da "permission denied" aunque RLS lo permita.
 grant usage on schema public to anon, authenticated, service_role;
 alter default privileges in schema public
   grant select, insert, update, delete on tables to anon, authenticated, service_role;
@@ -111,13 +111,13 @@ drop policy if exists "trades_delete_own" on public.trades;
 create policy "trades_delete_own" on public.trades
   for delete using (auth.uid() = user_id);
 
--- User roles (regular user vs admin). One row per auth user, created automatically on signup.
+-- Roles de usuario (normal vs admin). Una fila por usuario, creada automáticamente al registrarse.
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   role text not null default 'user' check (role in ('user', 'admin')),
-  -- If true, this user isn't required to set up 2FA. Admin-managed only.
+  -- Si es true, este usuario no está obligado a configurar 2FA. Solo lo administra un admin.
   mfa_exempt boolean not null default false,
-  -- Onboarding data, collected once after signup (personal info + trading info).
+  -- Datos de onboarding, recolectados una vez tras el registro (info personal + de trading).
   first_name text,
   last_name text,
   phone text,
@@ -132,7 +132,7 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
--- Idempotent for databases where the table already existed before these columns were added.
+-- Idempotente para bases donde la tabla ya existía antes de agregar estas columnas.
 alter table public.profiles add column if not exists mfa_exempt boolean not null default false;
 alter table public.profiles add column if not exists first_name text;
 alter table public.profiles add column if not exists last_name text;
@@ -153,7 +153,7 @@ drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles
   for select using (auth.uid() = id);
 
--- No update policy for regular users: role/mfa_exempt are admin-managed only.
+-- Sin política de update para usuarios normales: role/mfa_exempt los administra solo un admin.
 drop policy if exists "profiles_update_own" on public.profiles;
 
 drop trigger if exists profiles_set_updated_at on public.profiles;
@@ -161,7 +161,7 @@ create trigger profiles_set_updated_at
   before update on public.profiles
   for each row execute function public.set_updated_at();
 
--- Auto-create a profile row whenever a new auth user signs up.
+-- Crea automáticamente una fila de perfil cada vez que se registra un usuario nuevo.
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
@@ -175,7 +175,7 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- Storage bucket for trade chart screenshots.
+-- Bucket de storage para las capturas de gráficos de las operaciones.
 insert into storage.buckets (id, name, public)
 values ('trade-screenshots', 'trade-screenshots', true)
 on conflict (id) do nothing;

@@ -30,7 +30,7 @@ export default async function SetupMfaPage() {
     }
   }
 
-  // Clear stale unverified attempts before enrolling fresh each visit.
+  // Limpia intentos no verificados de antes, para inscribir uno nuevo en cada visita.
   await cleanUpUnverified();
   let { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({
     factorType: "totp",
@@ -38,7 +38,7 @@ export default async function SetupMfaPage() {
   });
 
   if (enrollError?.message.includes("already exists")) {
-    // Very rare race with a concurrent request for the same user — retry once.
+    // Carrera muy rara con una petición concurrente del mismo usuario — reintenta una vez.
     await cleanUpUnverified();
     ({ data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({
       factorType: "totp",

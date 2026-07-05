@@ -5,7 +5,9 @@ import type { Trade } from "@/types/trade";
 
 interface UIState {
   isNewTradeOpen: boolean;
+  editingTrade: Trade | null;
   openNewTrade: () => void;
+  openEditTrade: (trade: Trade) => void;
   closeNewTrade: () => void;
 
   selectedTrade: Trade | null;
@@ -15,8 +17,10 @@ interface UIState {
 
 export const useUIStore = create<UIState>((set) => ({
   isNewTradeOpen: false,
-  openNewTrade: () => set({ isNewTradeOpen: true }),
-  closeNewTrade: () => set({ isNewTradeOpen: false }),
+  editingTrade: null,
+  openNewTrade: () => set({ isNewTradeOpen: true, editingTrade: null }),
+  openEditTrade: (trade) => set({ isNewTradeOpen: true, editingTrade: trade }),
+  closeNewTrade: () => set({ isNewTradeOpen: false, editingTrade: null }),
 
   selectedTrade: null,
   openTrade: (trade) => set({ selectedTrade: trade }),

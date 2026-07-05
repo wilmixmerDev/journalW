@@ -16,7 +16,7 @@ const CATEGORIES: { value: ScreenshotCategory; label: string }[] = [
 const MAX_WIDTH = 1600;
 const JPEG_QUALITY = 0.82;
 
-/** Resizes and re-encodes an image client-side so uploads stay light on free-tier storage. */
+/** Redimensiona y recodifica la imagen en el cliente para que las subidas pesen poco en el plan gratuito. */
 async function compressImage(file: File): Promise<Blob> {
   try {
     const bitmap = await createImageBitmap(file);
@@ -126,7 +126,7 @@ export function ScreenshotUploader({ value, onChange }: ScreenshotUploaderProps)
                 multiple
                 className="hidden"
                 onChange={(e) => {
-                  // FileList is live, so snapshot it before clearing the input.
+                  // FileList es una colección viva, hay que copiarla antes de limpiar el input.
                   const files = Array.from(e.target.files ?? []);
                   e.target.value = "";
                   void handleFiles(cat.value, files);

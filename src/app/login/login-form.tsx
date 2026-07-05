@@ -29,7 +29,7 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
   const [error, setError] = useState<string | null>(errorMessage ?? null);
   const [notice, setNotice] = useState<string | null>(initialNotice ?? null);
 
-  // Post-signup 2FA enrollment, rendered inline in the showcase panel.
+  // Configuración de 2FA post-registro, mostrada dentro del panel de showcase.
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaError, setMfaError] = useState<string | null>(null);
@@ -124,7 +124,7 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
     }
 
     if (enrollError || !data) {
-      // Fall back to the standalone setup page.
+      // Recae en la página de configuración independiente.
       window.location.href = "/login/setup-mfa";
       return null;
     }
@@ -151,7 +151,7 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
       return;
     }
 
-    // Full navigation so the middleware re-evaluates the fresh AAL2 session.
+    // Navegación completa para que el middleware reevalúe la sesión AAL2 recién creada.
     window.location.href = "/login/onboarding";
   }
 

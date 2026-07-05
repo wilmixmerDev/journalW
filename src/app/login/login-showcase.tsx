@@ -26,7 +26,7 @@ export interface MfaSetupCardProps {
 }
 
 interface LoginShowcaseProps {
-  /** When set, the marketing carousel transitions into the 2FA setup card. */
+  /** Si está presente, el carrusel de marketing pasa a la tarjeta de configuración de 2FA. */
   mfaSetup?: MfaSetupCardProps | null;
 }
 

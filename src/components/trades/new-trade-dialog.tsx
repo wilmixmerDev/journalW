@@ -24,10 +24,16 @@ import { ScreenshotUploader } from "@/components/trades/screenshot-uploader";
 import { useAnimatedNumber } from "@/hooks/use-animated-number";
 import { useUIStore } from "@/store/ui-store";
 import { useJournalStore } from "@/store/journal-store";
-import { createTrade, createTradeOption, getTradeOptions, type TradeOptionLists } from "@/app/(app)/actions";
+import {
+  createTrade,
+  updateTrade,
+  createTradeOption,
+  getTradeOptions,
+  type TradeOptionLists,
+} from "@/app/(app)/actions";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { DISCIPLINE_ITEMS, computeDisciplineScore } from "@/lib/discipline";
-import type { TradeScreenshot } from "@/types/trade";
+import type { Trade, TradeScreenshot } from "@/types/trade";
 
 const MARKETS = ["Forex", "Cripto", "Índices", "Acciones", "Materias primas", "Futuros"];
 const SESSIONS = ["Asia", "Londres", "Nueva York", "Solapamiento Londres-NY"];
@@ -83,7 +89,10 @@ const schema = z
     takeProfitPrice: optionalNumber,
     riskPercent: z.coerce.number({ message: "Requerido" }).positive("Debe ser mayor a 0"),
     resultType: z.enum(["tp", "sl", "be"], { message: "Requerido" }),
-    rMultiple: z.coerce.number({ message: "Requerido" }),
+    // R conseguido (TP) o R objetivo (SL/BE) — siempre positivo, se guarda igual para las tres.
+    rMultiple: z.coerce.number({ message: "Requerido" }).positive("Debe ser mayor a 0"),
+    // Solo aplica a Break Even: el PnL real de cierre, que no siempre es exactamente 0.
+    pnlReal: optionalNumber,
     quality: z.enum(["a_plus", "a", "b", "c", "d"], { message: "Requerido" }),
     setup: z.string().optional(),
     timeframe: z.string().min(1, "Requerido"),
@@ -99,14 +108,8 @@ const schema = z
     notes: z.string().min(1, "Requerido"),
   })
   .superRefine((v, ctx) => {
-    if (v.resultType === "tp" && !(v.rMultiple > 0)) {
-      ctx.addIssue({ code: "custom", path: ["rMultiple"], message: "Con Take Profit el R debe ser positivo" });
-    }
-    if (v.resultType === "sl" && !(v.rMultiple < 0)) {
-      ctx.addIssue({ code: "custom", path: ["rMultiple"], message: "Con Stop Loss el R debe ser negativo" });
-    }
-    if (v.resultType === "be" && v.rMultiple !== 0) {
-      ctx.addIssue({ code: "custom", path: ["rMultiple"], message: "Con Break Even el R es 0" });
+    if (v.resultType === "be" && (v.pnlReal === undefined || !Number.isFinite(v.pnlReal))) {
+      ctx.addIssue({ code: "custom", path: ["pnlReal"], message: "Requerido" });
     }
     if (v.enteredAt && v.exitedAt && new Date(v.exitedAt) <= new Date(v.enteredAt)) {
       ctx.addIssue({ code: "custom", path: ["exitedAt"], message: "La salida debe ser posterior a la entrada" });
@@ -116,12 +119,18 @@ const schema = z
 type FormValues = z.input<typeof schema>;
 
 function computeOutcome(values: z.output<typeof schema>) {
+  if (values.resultType === "sl") {
+    return { pnl: Math.round(-values.riskPercent * 100) / 100 };
+  }
+  if (values.resultType === "be") {
+    return { pnl: Math.round((values.pnlReal ?? 0) * 100) / 100 };
+  }
   return { pnl: Math.round(values.riskPercent * values.rMultiple * 100) / 100 };
 }
 
 const EMPTY_OPTIONS: TradeOptionLists = { strategy: [], setupsByStrategy: {}, timeframe: [], tag: [] };
 
-/** Distance between plan prices, in pips for Forex or raw points otherwise. */
+/** Distancia entre los precios del plan, en pips para Forex o puntos crudos para el resto. */
 function computePriceStats(
   market: string | undefined,
   instrument: string | undefined,
@@ -141,8 +150,42 @@ function computePriceStats(
   return { unit, slDistance, tpDistance, plannedRR };
 }
 
+function toDateTimeLocal(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function tradeToFormValues(trade: Trade): FormValues {
+  return {
+    instrument: trade.instrument,
+    market: trade.market,
+    direction: trade.direction,
+    entryPrice: trade.entryPrice ?? undefined,
+    stopPrice: trade.stopPrice ?? undefined,
+    takeProfitPrice: trade.takeProfitPrice ?? undefined,
+    riskPercent: trade.riskPercent,
+    resultType: trade.resultType ?? "tp",
+    rMultiple: trade.rMultiple ?? undefined,
+    pnlReal: trade.resultType === "be" ? (trade.pnl ?? 0) : undefined,
+    quality: trade.quality ?? undefined,
+    setup: trade.setup ?? undefined,
+    timeframe: trade.timeframe ?? undefined,
+    emotionBefore: trade.emotionBefore ?? undefined,
+    emotionAfter: trade.emotionAfter ?? undefined,
+    tags: trade.tags,
+    enteredAt: toDateTimeLocal(trade.enteredAt),
+    exitedAt: trade.exitedAt ? toDateTimeLocal(trade.exitedAt) : toDateTimeLocal(trade.enteredAt),
+    strategy: trade.strategy ?? undefined,
+    session: trade.session ?? undefined,
+    screenshots: trade.screenshots,
+    disciplineChecklist: trade.disciplineChecklist,
+    notes: trade.notes ?? "",
+  } as FormValues;
+}
+
 function formatDistance(value: number) {
-  // Avoid rounding sub-1 distances down to "0".
+  // Evita que distancias menores a 1 se redondeen a "0".
   if (value > 0 && value < 1) {
     return value.toLocaleString("es", { maximumSignificantDigits: 3 });
   }
@@ -163,6 +206,7 @@ const STEPS: { label: string; fields: FieldPath<FormValues>[] }[] = [
 
 export function NewTradeDialog() {
   const isOpen = useUIStore((s) => s.isNewTradeOpen);
+  const editingTrade = useUIStore((s) => s.editingTrade);
   const close = useUIStore((s) => s.closeNewTrade);
   const journalType = useJournalStore((s) => s.journalType);
   const [isPending, startTransition] = useTransition();
@@ -197,6 +241,12 @@ export function NewTradeDialog() {
     if (!isOpen) return;
     getTradeOptions(journalType).then(setOptions);
   }, [isOpen, journalType]);
+
+  useEffect(() => {
+    if (!isOpen || !editingTrade) return;
+    reset(tradeToFormValues(editingTrade));
+    setStep(0);
+  }, [isOpen, editingTrade, reset]);
 
   const direction = watch("direction");
   const market = watch("market");
@@ -247,22 +297,18 @@ export function NewTradeDialog() {
   }
 
   function cooldownAfterStepChange() {
-    // Guards against a double-click hitting the button that re-renders in its place.
+    // Evita que un doble clic golpee el botón que se re-renderiza en su lugar.
     setJustAdvanced(true);
     setTimeout(() => setJustAdvanced(false), 400);
   }
 
-  // Mirrors the schema's superRefine, since zod skips it while later fields are empty.
+  // Refleja el superRefine del schema, ya que zod lo salta mientras campos posteriores están vacíos.
   function validateStepCrossFields(): boolean {
     if (step === 1) {
-      const r = Number(getValues("rMultiple"));
       const result = getValues("resultType");
-      if (result === "tp" && !(r > 0)) {
-        setError("rMultiple", { type: "custom", message: "Con Take Profit el R debe ser positivo" });
-        return false;
-      }
-      if (result === "sl" && !(r < 0)) {
-        setError("rMultiple", { type: "custom", message: "Con Stop Loss el R debe ser negativo" });
+      const pnlReal = getValues("pnlReal");
+      if (result === "be" && (pnlReal === undefined || pnlReal === ("" as unknown) || !Number.isFinite(Number(pnlReal)))) {
+        setError("pnlReal", { type: "custom", message: "Requerido" });
         return false;
       }
     }
@@ -304,23 +350,11 @@ export function NewTradeDialog() {
 
   function onResultTypeChange(value: "tp" | "sl" | "be") {
     setValue("resultType", value, { shouldValidate: true });
-    const current = Number(getValues("rMultiple"));
-    if (value === "be") {
-      setValue("rMultiple", 0, { shouldValidate: true });
-    } else if (Number.isFinite(current) && current !== 0) {
-      // Keep the magnitude the user already typed, flip the sign to match.
-      const coerced = value === "sl" ? -Math.abs(current) : Math.abs(current);
-      setValue("rMultiple", coerced, { shouldValidate: true });
-    }
   }
 
-  function coerceRMultipleSign(event: React.ChangeEvent<HTMLInputElement>) {
-    const result = getValues("resultType");
+  function coerceRMultipleToPositive(event: React.ChangeEvent<HTMLInputElement>) {
     const value = Number(event.target.value);
-    if (!Number.isFinite(value) || value === 0) return;
-    if (result === "sl" && value > 0) {
-      setValue("rMultiple", -value, { shouldValidate: true });
-    } else if (result === "tp" && value < 0) {
+    if (Number.isFinite(value) && value < 0) {
       setValue("rMultiple", Math.abs(value), { shouldValidate: true });
     }
   }
@@ -360,9 +394,9 @@ export function NewTradeDialog() {
     const { pnl } = computeOutcome(values);
 
     startTransition(async () => {
-      const result = await createTrade({
+      const payload = {
         journalType,
-        status: "closed",
+        status: "closed" as const,
         instrument: values.instrument,
         market: values.market,
         direction: values.direction,
@@ -387,7 +421,9 @@ export function NewTradeDialog() {
         disciplineChecklist: values.disciplineChecklist,
         disciplineScore: computeDisciplineScore(values.disciplineChecklist),
         notes: values.notes ?? null,
-      });
+      };
+
+      const result = editingTrade ? await updateTrade(editingTrade.id, payload) : await createTrade(payload);
 
       if (result.error) {
         setServerError(result.error);
@@ -397,7 +433,7 @@ export function NewTradeDialog() {
         return;
       }
 
-      toast.success("Operación registrada");
+      toast.success(editingTrade ? "Operación actualizada" : "Operación registrada");
       onOpenChange(false);
     });
   }
@@ -406,8 +442,12 @@ export function NewTradeDialog() {
     <Dialog open={isOpen} onOpenChange={onOpenChange} disablePointerDismissal>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Nueva operación</DialogTitle>
-          <DialogDescription>Registra los detalles de tu operación cerrada.</DialogDescription>
+          <DialogTitle>{editingTrade ? "Editar operación" : "Nueva operación"}</DialogTitle>
+          <DialogDescription>
+            {editingTrade
+              ? "Actualiza los detalles de esta operación."
+              : "Registra los detalles de tu operación cerrada."}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-1.5">
@@ -565,14 +605,13 @@ export function NewTradeDialog() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="rMultiple">RR conseguido</Label>
+                  <Label htmlFor="rMultiple">{resultType === "tp" ? "R conseguido" : "R objetivo"}</Label>
                   <Input
                     id="rMultiple"
                     type="number"
                     step="any"
-                    placeholder={resultType === "sl" ? "-1" : resultType === "be" ? "0" : "3"}
-                    disabled={resultType === "be"}
-                    {...register("rMultiple", { onChange: coerceRMultipleSign })}
+                    placeholder="3"
+                    {...register("rMultiple", { onChange: coerceRMultipleToPositive })}
                   />
                   {errors.rMultiple ? <FieldError message={errors.rMultiple.message} /> : null}
                 </div>
@@ -582,6 +621,14 @@ export function NewTradeDialog() {
                   {errors.riskPercent ? <FieldError message={errors.riskPercent.message} /> : null}
                 </div>
               </div>
+
+              {resultType === "be" ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="pnlReal">PnL real (%)</Label>
+                  <Input id="pnlReal" type="number" step="any" placeholder="0" {...register("pnlReal")} />
+                  {errors.pnlReal ? <FieldError message={errors.pnlReal.message} /> : null}
+                </div>
+              ) : null}
 
               <div className="space-y-1.5">
                 <Label>Calidad de la ejecución</Label>
@@ -776,7 +823,7 @@ export function NewTradeDialog() {
             </Button>
             {isLastStep ? (
               <Button type="submit" disabled={isPending || justAdvanced}>
-                {isPending ? "Guardando..." : "Guardar operación"}
+                {isPending ? "Guardando..." : editingTrade ? "Guardar cambios" : "Guardar operación"}
               </Button>
             ) : (
               <Button type="button" onClick={goNext} disabled={justAdvanced}>

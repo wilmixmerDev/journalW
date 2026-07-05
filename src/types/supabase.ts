@@ -1,5 +1,5 @@
-// Hand-written to match supabase/schema.sql.
-// Once a real Supabase project exists, replace with the generated types:
+// Escrito a mano para reflejar supabase/schema.sql.
+// Cuando exista un proyecto real de Supabase, reemplazar con los tipos generados:
 //   npx supabase gen types typescript --project-id <id> > src/types/supabase.ts
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];

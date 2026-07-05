@@ -52,7 +52,7 @@ export function MfaForm({ factorId }: MfaFormProps) {
   }
 
   async function handleGoBack() {
-    // Abandon the half-finished login (AAL1 session) and return to /login.
+    // Abandona el login a medias (sesión AAL1) y vuelve a /login.
     const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = "/login";

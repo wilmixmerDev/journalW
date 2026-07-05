@@ -227,7 +227,7 @@ function groupBy(trades: Trade[], keyFn: (t: Trade) => string): GroupedPerforman
     .sort((a, b) => b.trades - a.trades);
 }
 
-/** Like groupBy, but a single trade can contribute to several buckets (e.g. tags). */
+/** Como groupBy, pero una sola operación puede aportar a varios grupos (ej. etiquetas). */
 function groupByMulti(trades: Trade[], keysFn: (t: Trade) => string[]): GroupedPerformance[] {
   const groups = new Map<string, Trade[]>();
   for (const trade of closedTrades(trades)) {

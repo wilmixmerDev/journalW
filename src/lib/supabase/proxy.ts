@@ -1,9 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isSupabaseConfigured, getServerSupabaseUrl, SUPABASE_AUTH_COOKIE_NAME } from "@/lib/supabase/config";
 
 export async function updateSession(request: NextRequest) {
-  // Demo mode: no Supabase configured, so skip auth enforcement entirely.
+  // Modo demo: no hay Supabase configurado, así que se salta toda la validación de auth.
   if (!isSupabaseConfigured()) {
     return NextResponse.next({ request });
   }
@@ -11,9 +11,10 @@ export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    getServerSupabaseUrl(),
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: { name: SUPABASE_AUTH_COOKIE_NAME },
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -72,7 +73,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (isSetupMfaRoute) {
-    // 2FA is already set up (or the user is exempt) — nothing to do here.
+    // El 2FA ya está configurado (o el usuario está exento) — nada que hacer aquí.
     return redirectTo("/dashboard");
   }
 

@@ -1,7 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -10,9 +13,25 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useJournalTrades } from "@/hooks/use-journal-trades";
 import { useUIStore } from "@/store/ui-store";
+import { deleteTrade } from "@/app/(app)/actions";
 import { formatDate, formatR, formatSignedPercent } from "@/lib/format";
 import type { Trade } from "@/types/trade";
 
@@ -34,6 +53,23 @@ export function TradesClient({ live, backtest }: TradesClientProps) {
   const trades = useJournalTrades(live, backtest);
   const [filter, setFilter] = useState<Filter>("all");
   const openTrade = useUIStore((s) => s.openTrade);
+  const openEditTrade = useUIStore((s) => s.openEditTrade);
+  const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
+  const [isDeleting, startDeleteTransition] = useTransition();
+
+  function confirmDelete() {
+    if (!deletingTrade) return;
+    const trade = deletingTrade;
+    startDeleteTransition(async () => {
+      const result = await deleteTrade(trade.id);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Operación eliminada");
+      setDeletingTrade(null);
+    });
+  }
 
   const filtered = useMemo(() => {
     switch (filter) {
@@ -83,12 +119,13 @@ export function TradesClient({ live, backtest }: TradesClientProps) {
               <TableHead>Estrategia</TableHead>
               <TableHead className="text-right">R</TableHead>
               <TableHead className="text-right">P&amp;L</TableHead>
+              <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-sm text-ink-3">
+                <TableCell colSpan={7} className="py-10 text-center text-sm text-ink-3">
                   No hay operaciones para este filtro.
                 </TableCell>
               </TableRow>
@@ -124,6 +161,28 @@ export function TradesClient({ live, backtest }: TradesClientProps) {
                     <TableCell className={cn("text-right font-mono", win ? "text-pos" : "text-neg")}>
                       {formatSignedPercent(trade.pnl ?? 0)}
                     </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button variant="ghost" size="icon-sm">
+                              <MoreVertical />
+                              <span className="sr-only">Acciones</span>
+                            </Button>
+                          }
+                        />
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditTrade(trade)}>
+                            <Pencil />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem variant="destructive" onClick={() => setDeletingTrade(trade)}>
+                            <Trash2 />
+                            Eliminar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
                   </TableRow>
                 );
               })
@@ -131,6 +190,24 @@ export function TradesClient({ live, backtest }: TradesClientProps) {
           </TableBody>
         </Table>
       </div>
+
+      <AlertDialog open={!!deletingTrade} onOpenChange={(open) => !open && setDeletingTrade(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar operación</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará la operación en {deletingTrade?.instrument} de forma permanente. Esta acción no se puede
+              deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <Button variant="destructive" onClick={confirmDelete} disabled={isDeleting}>
+              {isDeleting ? "Eliminando..." : "Eliminar"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

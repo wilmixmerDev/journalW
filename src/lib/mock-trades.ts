@@ -1,7 +1,7 @@
 import { DISCIPLINE_ITEMS, computeDisciplineScore } from "@/lib/discipline";
 import type { Direction, JournalType, Quality, ResultType, Trade } from "@/types/trade";
 
-// Deterministic PRNG (mulberry32) so mock data is stable across renders/reloads.
+// PRNG determinista (mulberry32) para que los datos de ejemplo sean estables entre renders/recargas.
 function mulberry32(seed: number) {
   let a = seed;
   return () => {

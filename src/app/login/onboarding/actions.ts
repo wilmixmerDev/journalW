@@ -25,7 +25,7 @@ async function requireUserId() {
   return user.id;
 }
 
-/** Uses the service-role client since regular users have no update policy on `profiles`. */
+/** Usa el cliente de service-role porque los usuarios normales no tienen política de update en `profiles`. */
 export async function completeOnboarding(input: OnboardingInput): Promise<{ error: string | null }> {
   const userId = await requireUserId();
 

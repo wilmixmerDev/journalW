@@ -1,9 +1,10 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { getServerSupabaseUrl } from "@/lib/supabase/config";
 import type { Database } from "@/types/supabase";
 
-/** Service-role client — bypasses RLS. Server-only, never import from a Client Component. */
+/** Cliente de service-role — salta RLS. Solo servidor, nunca importar desde un Client Component. */
 export function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = getServerSupabaseUrl();
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) {

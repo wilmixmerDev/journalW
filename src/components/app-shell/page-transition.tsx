@@ -6,7 +6,7 @@ interface PageTransitionProps {
   children: React.ReactNode;
 }
 
-/** Remounts on every route change (via `key`) so the fade-up animation replays. */
+/** Se remonta en cada cambio de ruta (vía `key`) para que la animación fade-up se repita. */
 export function PageTransition({ children }: PageTransitionProps) {
   const pathname = usePathname();
 

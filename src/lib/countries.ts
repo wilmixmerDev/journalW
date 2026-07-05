@@ -1,4 +1,4 @@
-/** Static country catalog (Spanish names + phone dial codes), no external API needed. */
+/** Catálogo estático de países (nombres en español + código telefónico), sin API externa. */
 export interface Country {
   name: string;
   dial: string;
@@ -200,7 +200,7 @@ export const COUNTRIES: Country[] = [
   { name: "Zimbabue", dial: "+263" },
 ];
 
-/** Unique dial codes sorted for the phone prefix select. */
+/** Códigos telefónicos únicos, ordenados, para el select de prefijo. */
 export const DIAL_CODES: string[] = Array.from(new Set(COUNTRIES.map((c) => c.dial))).sort(
   (a, b) => Number(a.replace("+", "")) - Number(b.replace("+", ""))
 );

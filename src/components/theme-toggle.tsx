@@ -1,13 +1,25 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const noopSubscribe = () => () => {};
+
+/** El servidor no conoce el tema real (vive en localStorage); hasta montar en el cliente, se mantiene el ícono del server. */
+function useMounted() {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false
+  );
+}
+
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const mounted = useMounted();
 
   function toggleTheme() {
     const next = resolvedTheme === "dark" ? "light" : "dark";
@@ -52,7 +64,7 @@ export function ThemeToggle() {
       aria-label="Cambiar tema"
       onClick={toggleTheme}
     >
-      {resolvedTheme === "dark" ? (
+      {mounted && resolvedTheme === "dark" ? (
         <Sun className="size-4" />
       ) : (
         <Moon className="size-4" />

@@ -60,7 +60,7 @@ export async function listUsersForAdmin(): Promise<{ users: AdminUserRow[]; erro
   return { users, error: null };
 }
 
-/** Removes a user's 2FA factors and exempts them from the requirement until an admin re-requires it. */
+/** Elimina los factores de 2FA del usuario y lo exime hasta que un admin lo vuelva a requerir. */
 export async function disableUserMfa(userId: string): Promise<{ error: string | null }> {
   const caller = await requireAdmin();
   if (!caller) return { error: "No autorizado." };
@@ -83,7 +83,7 @@ export async function disableUserMfa(userId: string): Promise<{ error: string | 
   return { error: null };
 }
 
-/** Clears a user's exemption, forcing them through 2FA setup again on their next request. */
+/** Quita la exención del usuario, obligándolo a configurar el 2FA de nuevo. */
 export async function requireUserMfa(userId: string): Promise<{ error: string | null }> {
   const caller = await requireAdmin();
   if (!caller) return { error: "No autorizado." };
