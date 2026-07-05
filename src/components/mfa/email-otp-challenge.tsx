@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
 const RESEND_COOLDOWN_SECONDS = 30;
+const POLL_INTERVAL_MS = 2500;
 
 interface EmailOtpChallengeProps {
   email: string;
@@ -14,13 +15,29 @@ interface EmailOtpChallengeProps {
   onVerified: () => void;
   /** Si ya se envió el primer código antes de montar este componente (p. ej. desde el server). */
   alreadySent?: boolean;
+  /** Si el usuario verifica desde el enlace del correo en otra pestaña, esto detecta el cambio y avanza solo. */
+  onCheckVerifiedElsewhere?: () => Promise<boolean>;
+  /** Avisa al padre que esta pestaña quedó inhabilitada (verificado en otra pestaña), para que oculte
+   * cualquier acción propia (volver, cambiar de método, etc.) — esta pestaña ya no debe hacer nada más. */
+  onVerifiedElsewhere?: () => void;
 }
 
-export function EmailOtpChallenge({ email, onVerify, onResend, onVerified, alreadySent = true }: EmailOtpChallengeProps) {
+export function EmailOtpChallenge({
+  email,
+  onVerify,
+  onResend,
+  onVerified,
+  alreadySent = true,
+  onCheckVerifiedElsewhere,
+  onVerifiedElsewhere,
+}: EmailOtpChallengeProps) {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [cooldown, setCooldown] = useState(alreadySent ? RESEND_COOLDOWN_SECONDS : 0);
+  // Cuando se verifica desde el enlace en OTRA pestaña, esta se queda quieta en vez de seguir su
+  // propio proceso — la que continúa es la pestaña donde se abrió el enlace, para no duplicar el flujo.
+  const [verifiedElsewhere, setVerifiedElsewhere] = useState(false);
   const isVerifyingRef = useRef(false);
 
   useEffect(() => {
@@ -28,6 +45,24 @@ export function EmailOtpChallenge({ email, onVerify, onResend, onVerified, alrea
     const timer = setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
     return () => clearInterval(timer);
   }, [cooldown]);
+
+  useEffect(() => {
+    if (!onCheckVerifiedElsewhere) return;
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      if (cancelled || isVerifyingRef.current) return;
+      const verified = await onCheckVerifiedElsewhere();
+      if (verified && !cancelled) {
+        clearInterval(timer);
+        setVerifiedElsewhere(true);
+        onVerifiedElsewhere?.();
+      }
+    }, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [onCheckVerifiedElsewhere, onVerifiedElsewhere]);
 
   async function verify(currentCode: string) {
     if (isVerifyingRef.current) return;
@@ -62,6 +97,14 @@ export function EmailOtpChallenge({ email, onVerify, onResend, onVerified, alrea
     setCooldown(RESEND_COOLDOWN_SECONDS);
     const { error: resendError } = await onResend();
     if (resendError) setError(resendError);
+  }
+
+  if (verifiedElsewhere) {
+    return (
+      <div className="animate-fade-up rounded-lg border border-pos/30 bg-pos-soft px-4 py-3 text-sm text-pos">
+        Correo verificado ✓ — continúa el proceso en la pestaña donde abriste el enlace. Puedes cerrar esta.
+      </div>
+    );
   }
 
   return (

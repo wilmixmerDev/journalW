@@ -22,15 +22,17 @@ export default async function SetupMfaPage() {
     .eq("id", user.id)
     .single();
 
-  // El correo obligatorio ya está verificado (no debería llegar aquí salvo carrera rara) — nada que hacer.
-  if (profile?.email_mfa_verified_at) redirect("/dashboard");
+  // Si ya se verificó (p. ej. desde el enlace mágico del correo, abierto en esta misma pestaña),
+  // se salta el paso del código y se ofrece directo el autenticador — sin reenviar nada.
+  const alreadyVerified = Boolean(profile?.email_mfa_verified_at);
 
-  // Manda el primer código del correo obligatorio de una vez; el autenticador queda como paso opcional después.
-  await sendEmailOtp(user.id, user.email, "enroll");
+  if (!alreadyVerified) {
+    await sendEmailOtp(user.id, user.email, "enroll");
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center px-6">
-      <SetupMfaForm email={user.email} />
+      <SetupMfaForm email={user.email} initialStage={alreadyVerified ? "totp-offer" : "email-otp"} />
     </div>
   );
 }

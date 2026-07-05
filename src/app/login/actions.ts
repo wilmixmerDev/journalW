@@ -3,17 +3,13 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { siteUrl } from "@/lib/site-url";
 import {
   EMAIL_MFA_SESSION_COOKIE,
-  createEmailMfaSession,
+  completeEmailOtpVerification,
+  hasConsumedLatestCode,
   sendEmailOtp,
-  verifyEmailOtp,
 } from "@/lib/mfa/email-otp";
-
-function siteUrl() {
-  return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-}
 
 async function requireUser() {
   const supabase = await createClient();
@@ -37,28 +33,25 @@ export async function verifyAuthEmailOtp(
   const user = await requireUser();
   if (!user?.email) return { error: "Debes iniciar sesión." };
 
-  const { error } = await verifyEmailOtp(user.id, code, purpose);
-  if (error) return { error };
+  const { error, session } = await completeEmailOtpVerification(user.id, code, purpose);
+  if (error || !session) return { error };
 
-  if (purpose === "enroll") {
-    const admin = createAdminClient();
-    const { error: profileError } = await admin
-      .from("profiles")
-      .update({ email_mfa_verified_at: new Date().toISOString() })
-      .eq("id", user.id);
-    if (profileError) return { error: profileError.message };
-  }
-
-  const { token, expiresAt } = await createEmailMfaSession(user.id);
-  (await cookies()).set(EMAIL_MFA_SESSION_COOKIE, token, {
+  (await cookies()).set(EMAIL_MFA_SESSION_COOKIE, session.token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    expires: expiresAt,
+    expires: session.expiresAt,
   });
 
   return { error: null };
+}
+
+/** La pantalla de "esperando código" la usa para detectar que ya se verificó vía el enlace mágico en otra pestaña. */
+export async function checkAuthEmailOtpVerified(purpose: "enroll" | "login"): Promise<boolean> {
+  const user = await requireUser();
+  if (!user) return false;
+  return hasConsumedLatestCode(user.id, purpose);
 }
 
 export async function signInWithGoogle() {

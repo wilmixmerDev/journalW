@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { EmailOtpChallenge } from "@/components/mfa/email-otp-challenge";
 import { enrollTotp, type TotpEnrollment } from "@/lib/mfa/enroll-totp";
-import { signInWithGoogle, sendAuthEmailOtp, verifyAuthEmailOtp } from "./actions";
+import { signInWithGoogle, sendAuthEmailOtp, verifyAuthEmailOtp, checkAuthEmailOtpVerified } from "./actions";
 import { LoginShowcase, type MfaSetupCardProps } from "./login-showcase";
 
 type SignupStage = "credentials" | "email-otp" | "totp-offer" | "totp-enroll";
@@ -194,6 +195,7 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
               onVerify={(code) => verifyAuthEmailOtp(code, "enroll")}
               onResend={() => sendAuthEmailOtp("enroll")}
               onVerified={handleEmailOtpVerified}
+              onCheckVerifiedElsewhere={() => checkAuthEmailOtpVerified("enroll")}
             />
             <Button type="button" variant="ghost" className="mt-2 w-full" onClick={abandonSignup}>
               ← Volver al inicio de sesión
@@ -226,10 +228,15 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
               Correo verificado
             </div>
             <h2 className="mb-1.5 font-serif text-[32px] font-normal">Activa tu autenticador</h2>
-            <p className="mb-6 text-sm text-ink-2">
+            <p className="mb-6 text-sm text-ink-2 lg:hidden">
               Escanea el código QR con tu app autenticadora (Google Authenticator, Authy...).
-              <span className="hidden lg:inline"> Lo ves también en el panel derecho.</span>
             </p>
+
+            {/* En desktop el QR y el código van en el panel oscuro de la derecha; esto dirige la mirada hacia allá. */}
+            <div className="mb-6 hidden animate-fade-up items-center gap-3 rounded-xl border border-gold/30 bg-gold-soft px-4 py-3 text-sm font-medium text-gold lg:flex">
+              <span>Mira el panel de la derecha para escanear el código</span>
+              <ArrowRight className="size-5 shrink-0 animate-nudge-right" />
+            </div>
 
             {/* On mobile the dark showcase panel doesn't exist, so the QR card renders here. */}
             <div className="mb-6 lg:hidden">

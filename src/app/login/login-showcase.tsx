@@ -74,10 +74,9 @@ export function LoginShowcase({ mfaSetup = null }: LoginShowcaseProps) {
 
           <form
             onSubmit={mfaSetup.onSubmit}
-            className="rounded-[18px] border border-white/10 p-6 backdrop-blur-md"
+            className="animate-attention-pulse rounded-[18px] border border-white/10 p-6 backdrop-blur-md"
             style={{
               background: "linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.02))",
-              boxShadow: "0 24px 60px rgba(0,0,0,.4)",
             }}
           >
             <div className="flex items-start gap-5">

@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { EmailOtpChallenge } from "@/components/mfa/email-otp-challenge";
-import { sendAuthEmailOtp, verifyAuthEmailOtp } from "@/app/login/actions";
+import { sendAuthEmailOtp, verifyAuthEmailOtp, checkAuthEmailOtpVerified } from "@/app/login/actions";
 
 interface MfaFormProps {
   totpFactorId: string | null;
@@ -22,6 +22,7 @@ export function MfaForm({ totpFactorId, email }: MfaFormProps) {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const [stopped, setStopped] = useState(false);
   const isVerifyingRef = useRef(false);
 
   function goToDashboard() {
@@ -135,20 +136,24 @@ export function MfaForm({ totpFactorId, email }: MfaFormProps) {
               onVerify={(otp) => verifyAuthEmailOtp(otp, "login")}
               onResend={() => sendAuthEmailOtp("login")}
               onVerified={goToDashboard}
+              onCheckVerifiedElsewhere={() => checkAuthEmailOtpVerified("login")}
+              onVerifiedElsewhere={() => setStopped(true)}
             />
           </div>
         </>
       )}
 
-      {totpFactorId && method !== "choose" ? (
+      {!stopped && totpFactorId && method !== "choose" ? (
         <Button type="button" variant="ghost" className="mt-2 w-full" onClick={() => setMethod("choose")}>
           ← Elegir otro método
         </Button>
       ) : null}
 
-      <Button type="button" variant="ghost" className="mt-2 w-full" disabled={isPending} onClick={handleGoBack}>
-        ← Volver al inicio de sesión
-      </Button>
+      {!stopped ? (
+        <Button type="button" variant="ghost" className="mt-2 w-full" disabled={isPending} onClick={handleGoBack}>
+          ← Volver al inicio de sesión
+        </Button>
+      ) : null}
     </div>
   );
 }

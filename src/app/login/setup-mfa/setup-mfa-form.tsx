@@ -7,20 +7,22 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { EmailOtpChallenge } from "@/components/mfa/email-otp-challenge";
 import { enrollTotp, type TotpEnrollment } from "@/lib/mfa/enroll-totp";
-import { sendAuthEmailOtp, verifyAuthEmailOtp } from "@/app/login/actions";
-
-interface SetupMfaFormProps {
-  email: string;
-}
+import { sendAuthEmailOtp, verifyAuthEmailOtp, checkAuthEmailOtpVerified } from "@/app/login/actions";
 
 type Stage = "email-otp" | "totp-offer" | "totp-enroll";
 
-export function SetupMfaForm({ email }: SetupMfaFormProps) {
-  const [stage, setStage] = useState<Stage>("email-otp");
+interface SetupMfaFormProps {
+  email: string;
+  initialStage?: Stage;
+}
+
+export function SetupMfaForm({ email, initialStage = "email-otp" }: SetupMfaFormProps) {
+  const [stage, setStage] = useState<Stage>(initialStage);
   const [enrollment, setEnrollment] = useState<TotpEnrollment | null>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const [stopped, setStopped] = useState(false);
 
   async function handleActivateTotp() {
     const enrolled = await enrollTotp(createClient());
@@ -89,11 +91,15 @@ export function SetupMfaForm({ email }: SetupMfaFormProps) {
             onVerify={(otp) => verifyAuthEmailOtp(otp, "enroll")}
             onResend={() => sendAuthEmailOtp("enroll")}
             onVerified={() => setStage("totp-offer")}
+            onCheckVerifiedElsewhere={() => checkAuthEmailOtpVerified("enroll")}
+            onVerifiedElsewhere={() => setStopped(true)}
           />
         </div>
-        <Button type="button" variant="ghost" className="mt-2 w-full" onClick={handleGoBack}>
-          ← Volver al inicio de sesión
-        </Button>
+        {!stopped ? (
+          <Button type="button" variant="ghost" className="mt-2 w-full" onClick={handleGoBack}>
+            ← Volver al inicio de sesión
+          </Button>
+        ) : null}
       </div>
     );
   }

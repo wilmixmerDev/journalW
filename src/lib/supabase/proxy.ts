@@ -76,11 +76,6 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
-  if (isSetupMfaRoute) {
-    // El 2FA obligatorio ya está configurado (o el usuario está exento) — nada que hacer aquí.
-    return redirectTo("/dashboard");
-  }
-
   const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   // "Tiene algún factor" = TOTP activado (Supabase exige aal2) o ya pasó por el correo obligatorio.
   const hasAnyFactor = Boolean(aal && aal.nextLevel === "aal2") || Boolean(profile?.email_mfa_verified_at);
@@ -94,7 +89,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (needsChallenge) {
-    if (!isMfaRoute && !isAuthCallback && !isPublicAsset) {
+    // isAuthRoute y isSetupMfaRoute quedan exentos por la misma razón que arriba: sus propios flujos
+    // llaman server actions repetidas veces (incluido el polling del enlace mágico) antes de navegar solos.
+    if (!isMfaRoute && !isAuthRoute && !isSetupMfaRoute && !isAuthCallback && !isPublicAsset) {
       return redirectTo("/login/mfa");
     }
     return supabaseResponse;
@@ -103,14 +100,22 @@ export async function updateSession(request: NextRequest) {
   const needsOnboarding = !profile?.onboarding_completed_at;
 
   if (needsOnboarding) {
-    if (!isOnboardingRoute && !isAuthCallback && !isPublicAsset) {
+    // Mismo motivo que los gates anteriores: mientras se está en pleno flujo de auth (registro,
+    // reto de login, o setup-mfa) las server actions no deben ser interceptadas por este redirect.
+    if (!isOnboardingRoute && !isAuthRoute && !isMfaRoute && !isSetupMfaRoute && !isAuthCallback && !isPublicAsset) {
       return redirectTo("/login/onboarding");
     }
     return supabaseResponse;
   }
 
-  if (isAuthRoute || isMfaRoute || isOnboardingRoute) {
-    return redirectTo("/dashboard");
+  if (isAuthRoute || isMfaRoute || isSetupMfaRoute || isOnboardingRoute) {
+    // Solo se redirige en navegación real (GET). Un POST aquí es una server action en curso
+    // (p. ej. el polling del enlace mágico) que ya está a punto de navegar por su cuenta —
+    // redirigirla igual rompe esa llamada con "unexpected response".
+    if (request.method === "GET") {
+      return redirectTo("/dashboard");
+    }
+    return supabaseResponse;
   }
 
   return supabaseResponse;
