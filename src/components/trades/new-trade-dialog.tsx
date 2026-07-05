@@ -467,6 +467,7 @@ export function NewTradeDialog() {
             </p>
           ) : null}
 
+          <div key={step} className="animate-step-in space-y-4">
           {step === 0 ? (
             <>
               <div className="grid grid-cols-2 gap-3">
@@ -623,7 +624,7 @@ export function NewTradeDialog() {
               </div>
 
               {resultType === "be" ? (
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 animate-fade-up">
                   <Label htmlFor="pnlReal">PnL real (%)</Label>
                   <Input id="pnlReal" type="number" step="any" placeholder="0" {...register("pnlReal")} />
                   {errors.pnlReal ? <FieldError message={errors.pnlReal.message} /> : null}
@@ -812,6 +813,7 @@ export function NewTradeDialog() {
               </div>
             </>
           ) : null}
+          </div>
 
           <div className="flex justify-between gap-2 pt-2">
             <Button
@@ -839,5 +841,5 @@ export function NewTradeDialog() {
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
-  return <p className="text-xs text-neg">{message}</p>;
+  return <p className="animate-fade-up text-xs text-neg">{message}</p>;
 }
