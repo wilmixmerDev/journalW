@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { COUNTRIES } from "@/lib/countries";
-import { completeOnboarding, skipOnboarding } from "./actions";
+import { completeOnboarding } from "./actions";
 
 const MARKETS = ["Forex", "Cripto", "Índices", "Acciones", "Materias primas", "Futuros"];
 
@@ -168,26 +168,11 @@ export function OnboardingForm() {
     window.location.href = "/dashboard";
   }
 
-  async function handleSkip() {
-    if (justAdvanced) return;
-    setServerError(null);
-    setIsPending(true);
-
-    const { error } = await skipOnboarding();
-    if (error) {
-      setServerError(error);
-      setIsPending(false);
-      return;
-    }
-
-    window.location.href = "/dashboard";
-  }
-
   return (
     <div className="w-full max-w-lg animate-fade-up">
       <h1 className="font-serif text-4xl text-ink">Cuéntanos sobre ti</h1>
       <p className="mt-2 text-sm text-ink-2">
-        Nos ayuda a personalizar tu experiencia. Puedes omitir este paso y completarlo después.
+        Necesitamos estos datos para terminar de crear tu cuenta.
       </p>
 
       <div className="mt-6 space-y-1.5">
@@ -377,9 +362,6 @@ export function OnboardingForm() {
                 Atrás
               </Button>
             ) : null}
-            <Button type="button" variant="ghost" onClick={handleSkip} disabled={isPending}>
-              Omitir por ahora
-            </Button>
           </div>
           {isLastStep ? (
             <Button type="submit" disabled={isPending}>

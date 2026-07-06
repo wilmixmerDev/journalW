@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { PasswordStrengthMeter, isPasswordStrongEnough } from "@/components/ui/password-strength";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
@@ -35,12 +36,15 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
   const [mfaCode, setMfaCode] = useState("");
   const [mfaError, setMfaError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [signupStopped, setSignupStopped] = useState(false);
+  const [passwordValue, setPasswordValue] = useState("");
   const isVerifyingRef = useRef(false);
 
   function switchMode(next: "login" | "signup") {
     setMode(next);
     setError(null);
     setNotice(null);
+    setPasswordValue("");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -65,6 +69,12 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
       // El middleware decide si hace falta pasar por /login/mfa (TOTP y/o correo) antes del dashboard.
       router.push("/dashboard");
       router.refresh();
+      return;
+    }
+
+    if (!isPasswordStrongEnough(password)) {
+      setError("La contraseña no es lo suficientemente segura. Revisa los requisitos de abajo.");
+      setIsPending(false);
       return;
     }
 
@@ -196,10 +206,13 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
               onResend={() => sendAuthEmailOtp("enroll")}
               onVerified={handleEmailOtpVerified}
               onCheckVerifiedElsewhere={() => checkAuthEmailOtpVerified("enroll")}
+              onVerifiedElsewhere={() => setSignupStopped(true)}
             />
-            <Button type="button" variant="ghost" className="mt-2 w-full" onClick={abandonSignup}>
-              ← Volver al inicio de sesión
-            </Button>
+            {!signupStopped ? (
+              <Button type="button" variant="ghost" className="mt-2 w-full" onClick={abandonSignup}>
+                ← Volver al inicio de sesión
+              </Button>
+            ) : null}
           </div>
         ) : signupStage === "totp-offer" ? (
           <div className="w-full max-w-[360px] animate-fade-up">
@@ -305,10 +318,13 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
                   name="password"
                   placeholder="••••••••"
                   required
-                  minLength={6}
+                  minLength={mode === "signup" ? 8 : 6}
                   autoComplete={mode === "login" ? "current-password" : "new-password"}
                   aria-invalid={Boolean(error)}
+                  value={passwordValue}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setPasswordValue(e.target.value)}
                 />
+                {mode === "signup" ? <PasswordStrengthMeter password={passwordValue} /> : null}
               </div>
 
               <Button

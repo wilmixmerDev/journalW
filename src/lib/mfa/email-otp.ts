@@ -1,6 +1,4 @@
 import { randomInt, randomBytes, createHash, timingSafeEqual } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/brevo";
 import { siteUrl } from "@/lib/site-url";
@@ -36,17 +34,6 @@ const PURPOSE_COPY: Record<EmailOtpPurpose, { subject: string; heading: string; 
 /** El enlace mágico solo tiene sentido para flujos de "verificar y seguir" — security va siempre con código manual. */
 const MAGIC_LINK_PURPOSES = new Set<EmailOtpPurpose>(["enroll", "login"]);
 
-let cachedLogoDataUri: string | null = null;
-
-/** Data URI embebido directo en el HTML — Brevo no soporta adjuntos inline por cid:, y así tampoco depende de una URL pública. */
-function getLogoDataUri(): string {
-  if (!cachedLogoDataUri) {
-    const bytes = readFileSync(join(process.cwd(), "public/brand/icon-light-96.png"));
-    cachedLogoDataUri = `data:image/png;base64,${bytes.toString("base64")}`;
-  }
-  return cachedLogoDataUri;
-}
-
 function hashHex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -65,7 +52,7 @@ function buildEmailHtml(purpose: EmailOtpPurpose, code: string): string {
 <div style="background:#F4F1EA;padding:32px 16px;font-family:Helvetica,Arial,sans-serif;">
   <div style="max-width:420px;margin:0 auto;background:#FBFAF6;border-radius:16px;overflow:hidden;border:1px solid #E5E0D5;">
     <div style="padding:28px 32px 0;">
-      <img src="${getLogoDataUri()}" width="40" height="40" alt="Journal W" style="display:block;border-radius:10px;" />
+      <div style="width:40px;height:40px;line-height:40px;border-radius:11px;background:#1C1A16;color:#F4F1EA;font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:700;text-align:center;">W</div>
     </div>
     <div style="padding:20px 32px 32px;">
       <h1 style="margin:0 0 8px;font-size:22px;line-height:1.3;color:#1C1A16;">${heading}</h1>

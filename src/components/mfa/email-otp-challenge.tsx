@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { CircleCheckIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -101,8 +102,16 @@ export function EmailOtpChallenge({
 
   if (verifiedElsewhere) {
     return (
-      <div className="animate-fade-up rounded-lg border border-pos/30 bg-pos-soft px-4 py-3 text-sm text-pos">
-        Correo verificado ✓ — continúa el proceso en la pestaña donde abriste el enlace. Puedes cerrar esta.
+      <div className="animate-fade-up flex flex-col items-center gap-3 rounded-2xl border border-pos/20 bg-pos-soft/60 px-6 py-8 text-center">
+        <div className="animate-scale-in flex size-12 items-center justify-center rounded-full bg-pos/15">
+          <CircleCheckIcon className="size-6 text-pos" strokeWidth={2} />
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-ink">Correo verificado</p>
+          <p className="text-sm text-ink-2">
+            Continúa el proceso en la pestaña donde abriste el enlace. Puedes cerrar esta.
+          </p>
+        </div>
       </div>
     );
   }

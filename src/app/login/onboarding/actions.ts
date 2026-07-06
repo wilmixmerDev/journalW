@@ -48,15 +48,3 @@ export async function completeOnboarding(input: OnboardingInput): Promise<{ erro
 
   return { error: error?.message ?? null };
 }
-
-export async function skipOnboarding(): Promise<{ error: string | null }> {
-  const userId = await requireUserId();
-
-  const admin = createAdminClient();
-  const { error } = await admin
-    .from("profiles")
-    .update({ onboarding_completed_at: new Date().toISOString() })
-    .eq("id", userId);
-
-  return { error: error?.message ?? null };
-}
