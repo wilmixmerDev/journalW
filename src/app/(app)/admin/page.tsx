@@ -28,5 +28,5 @@ export default async function AdminPage() {
 
   const { users, error } = await listUsersForAdmin();
 
-  return <AdminClient initialUsers={users} initialError={error} />;
+  return <AdminClient initialUsers={users} initialError={error} currentUserId={user.id} />;
 }
