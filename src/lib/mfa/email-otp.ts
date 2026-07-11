@@ -52,7 +52,7 @@ function buildEmailHtml(purpose: EmailOtpPurpose, code: string): string {
 <div style="background:#F4F1EA;padding:32px 16px;font-family:Helvetica,Arial,sans-serif;">
   <div style="max-width:420px;margin:0 auto;background:#FBFAF6;border-radius:16px;overflow:hidden;border:1px solid #E5E0D5;">
     <div style="padding:28px 32px 0;">
-      <div style="width:40px;height:40px;line-height:40px;border-radius:11px;background:#1C1A16;color:#F4F1EA;font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:700;text-align:center;">W</div>
+      <img src="${siteUrl()}/brand/icon-light-96.png" width="40" height="40" alt="Journal W" style="display:block;border-radius:11px;" />
     </div>
     <div style="padding:20px 32px 32px;">
       <h1 style="margin:0 0 8px;font-size:22px;line-height:1.3;color:#1C1A16;">${heading}</h1>

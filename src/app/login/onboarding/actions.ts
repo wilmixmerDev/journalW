@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendWelcomeEmail } from "@/lib/email/welcome";
 
 export interface OnboardingInput {
   firstName: string;
@@ -16,18 +17,18 @@ export interface OnboardingInput {
   timezone: string;
 }
 
-async function requireUserId() {
+async function requireUser() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  return user.id;
+  return user;
 }
 
 /** Usa el cliente de service-role porque los usuarios normales no tienen política de update en `profiles`. */
 export async function completeOnboarding(input: OnboardingInput): Promise<{ error: string | null }> {
-  const userId = await requireUserId();
+  const user = await requireUser();
 
   const admin = createAdminClient();
   const { error } = await admin
@@ -44,7 +45,11 @@ export async function completeOnboarding(input: OnboardingInput): Promise<{ erro
       timezone: input.timezone,
       onboarding_completed_at: new Date().toISOString(),
     })
-    .eq("id", userId);
+    .eq("id", user.id);
+
+  if (!error && user.email) {
+    await sendWelcomeEmail(user.email, input.firstName);
+  }
 
   return { error: error?.message ?? null };
 }

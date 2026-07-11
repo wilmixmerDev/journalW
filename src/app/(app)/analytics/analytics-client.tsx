@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/shared/metric-card";
 import { PerformanceTable } from "@/components/shared/performance-table";
 import {
@@ -32,12 +34,17 @@ import {
   performanceByWeekday,
   type GroupedPerformance,
 } from "@/lib/metrics";
+import { buildAiPrompt } from "@/lib/data-export";
+import { downloadTradingReportPdf } from "@/lib/data-export-pdf";
 import { formatPercent } from "@/lib/format";
 import type { Trade } from "@/types/trade";
+import type { Profile } from "@/types/profile";
 
 interface AnalyticsClientProps {
   live: Trade[];
   backtest: Trade[];
+  profile: Profile | null;
+  email: string | null;
 }
 
 const CATEGORIES = [
@@ -54,7 +61,7 @@ const CATEGORIES = [
 
 type CategoryValue = (typeof CATEGORIES)[number]["value"];
 
-export function AnalyticsClient({ live, backtest }: AnalyticsClientProps) {
+export function AnalyticsClient({ live, backtest, profile, email }: AnalyticsClientProps) {
   const trades = useJournalTrades(live, backtest);
   const metrics = computeMetrics(trades);
   const equityCurve = buildEquityCurve(trades);
@@ -64,12 +71,43 @@ export function AnalyticsClient({ live, backtest }: AnalyticsClientProps) {
   const [category, setCategory] = useState<CategoryValue>("strategy");
   const activeCategory = CATEGORIES.find((c) => c.value === category) ?? CATEGORIES[0];
   const categoryData = useMemo(() => activeCategory.build(trades), [activeCategory, trades]);
+  const [isExporting, setIsExporting] = useState(false);
+
+  async function downloadData() {
+    if (!profile) return;
+    setIsExporting(true);
+    try {
+      await downloadTradingReportPdf({ profile, email, live, backtest });
+      toast.success("Reporte descargado");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  async function copyAiPrompt() {
+    if (!profile) return;
+    const prompt = buildAiPrompt({ profile, email, live, backtest });
+    await navigator.clipboard.writeText(prompt);
+    toast.success("Prompt copiado — pégalo en tu IA favorita");
+  }
 
   return (
     <div className="space-y-6 p-4 lg:p-8">
-      <div>
-        <h1 className="font-serif text-3xl text-ink">Analíticas</h1>
-        <p className="text-sm text-ink-2">Profundiza en el porqué de tus resultados.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="font-serif text-3xl text-ink">Analíticas</h1>
+          <p className="text-sm text-ink-2">Profundiza en el porqué de tus resultados.</p>
+        </div>
+        {profile ? (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button type="button" variant="outline" size="sm" disabled={isExporting} onClick={downloadData}>
+              {isExporting ? "Generando..." : "Descargar resumen de estadísticas"}
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={copyAiPrompt}>
+              Copiar prompt para IA
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
