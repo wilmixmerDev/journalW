@@ -186,8 +186,35 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
     : null;
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[1.05fr_.95fr]">
+    <div className="grid min-h-screen grid-rows-[auto_1fr] lg:grid-cols-[1.05fr_.95fr] lg:grid-rows-1">
       <LoginShowcase mfaSetup={mfaSetup} />
+
+      {/* Versión condensada del panel oscuro de escritorio, para que el login en móvil no pierda la identidad de marca. */}
+      <div className="relative order-0 overflow-hidden bg-[#141210] px-6 pt-8 pb-9 text-[#EDE8DE] lg:hidden">
+        <div
+          className="pointer-events-none absolute -top-24 -right-24 size-72 rounded-full"
+          style={{ background: "radial-gradient(circle, rgba(201,165,95,.18), transparent 70%)" }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-50"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)",
+            backgroundSize: "44px 44px",
+          }}
+        />
+        <div className="relative flex items-center gap-2.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/icon-dark.svg" alt="" className="size-7 shrink-0" />
+          <span className="font-serif text-lg tracking-tight">Journal W</span>
+        </div>
+        <div className="relative mt-5 font-mono text-[10px] tracking-[.18em] text-[#C9A55F] uppercase">
+          Trading Journal
+        </div>
+        <p className="relative mt-1.5 font-serif text-[26px] leading-[1.15] tracking-tight">
+          No registres trades. <span className="text-[#A39C8F] italic">Conviértete en mejor trader.</span>
+        </p>
+      </div>
 
       <div className="theme-force-light order-1 flex items-center justify-center bg-surface px-6 py-16 text-ink">
         {signupStage === "email-otp" ? (

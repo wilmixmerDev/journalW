@@ -36,12 +36,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen w-full">
       <Sidebar email={email} displayName={displayName} isDemo={!configured} isAdmin={isAdmin} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <MobileHeader email={email} displayName={displayName} isAdmin={isAdmin} />
+        <MobileHeader email={email} displayName={displayName} />
         <main className="flex-1 pb-20 lg:pb-0">
           <PageTransition>{children}</PageTransition>
         </main>
       </div>
-      <MobileNav />
+      <MobileNav isAdmin={isAdmin} />
       <NewTradeDialog />
       <TradeDetailSheet />
     </div>
