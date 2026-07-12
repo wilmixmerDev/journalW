@@ -23,6 +23,7 @@ export async function enrollTotp(supabase: BrowserSupabaseClient): Promise<TotpE
   let { data, error: enrollError } = await supabase.auth.mfa.enroll({
     factorType: "totp",
     friendlyName: "Authenticator",
+    issuer: "Journal W",
   });
 
   if (enrollError?.message.includes("already exists")) {
@@ -30,6 +31,7 @@ export async function enrollTotp(supabase: BrowserSupabaseClient): Promise<TotpE
     ({ data, error: enrollError } = await supabase.auth.mfa.enroll({
       factorType: "totp",
       friendlyName: "Authenticator",
+      issuer: "Journal W",
     }));
   }
 
