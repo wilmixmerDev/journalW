@@ -13,7 +13,13 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 export const EMAIL_MFA_SESSION_COOKIE = "journalw-email-mfa";
 
-const PURPOSE_COPY: Record<EmailOtpPurpose, { subject: string; heading: string; intro: string }> = {
+export interface EmailOtpCopy {
+  subject: string;
+  heading: string;
+  intro: string;
+}
+
+const PURPOSE_COPY: Record<EmailOtpPurpose, EmailOtpCopy> = {
   enroll: {
     subject: "Verifica tu correo — Journal W",
     heading: "Verifica tu correo",
@@ -42,8 +48,8 @@ function generateCode(): string {
   return String(randomInt(0, 10 ** CODE_LENGTH)).padStart(CODE_LENGTH, "0");
 }
 
-function buildEmailHtml(purpose: EmailOtpPurpose, code: string): string {
-  const { heading, intro } = PURPOSE_COPY[purpose];
+function buildEmailHtml(purpose: EmailOtpPurpose, code: string, copy: EmailOtpCopy): string {
+  const { heading, intro } = copy;
   const verifyUrl = MAGIC_LINK_PURPOSES.has(purpose)
     ? `${siteUrl()}/auth/verify-email-otp?code=${code}&purpose=${purpose}`
     : null;
@@ -78,7 +84,8 @@ function buildEmailHtml(purpose: EmailOtpPurpose, code: string): string {
 export async function sendEmailOtp(
   userId: string,
   email: string,
-  purpose: EmailOtpPurpose
+  purpose: EmailOtpPurpose,
+  copy: EmailOtpCopy = PURPOSE_COPY[purpose]
 ): Promise<{ error: string | null }> {
   const admin = createAdminClient();
 
@@ -107,8 +114,8 @@ export async function sendEmailOtp(
 
   const { error: emailError } = await sendEmail({
     to: email,
-    subject: PURPOSE_COPY[purpose].subject,
-    html: buildEmailHtml(purpose, code),
+    subject: copy.subject,
+    html: buildEmailHtml(purpose, code, copy),
   });
 
   return { error: emailError };

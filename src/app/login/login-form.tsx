@@ -11,7 +11,14 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { EmailOtpChallenge } from "@/components/mfa/email-otp-challenge";
 import { enrollTotp, type TotpEnrollment } from "@/lib/mfa/enroll-totp";
-import { signInWithGoogle, sendAuthEmailOtp, verifyAuthEmailOtp, checkAuthEmailOtpVerified } from "./actions";
+import {
+  signInWithGoogle,
+  sendAuthEmailOtp,
+  verifyAuthEmailOtp,
+  checkAuthEmailOtpVerified,
+  requestPasswordReset,
+  resetPasswordWithCode,
+} from "./actions";
 import { LoginShowcase, type MfaSetupCardProps } from "./login-showcase";
 
 type SignupStage = "credentials" | "email-otp" | "totp-offer" | "totp-enroll";
@@ -23,7 +30,7 @@ interface LoginFormProps {
 
 export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProps) {
   const router = useRouter();
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "reset">("login");
   const [isPending, setIsPending] = useState(false);
   const [isGooglePending, startGoogleTransition] = useTransition();
   const [error, setError] = useState<string | null>(errorMessage ?? null);
@@ -40,11 +47,17 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
   const [passwordValue, setPasswordValue] = useState("");
   const isVerifyingRef = useRef(false);
 
-  function switchMode(next: "login" | "signup") {
+  // Recuperación de contraseña: paso 1 pide el correo, paso 2 pide el código recibido + la contraseña nueva.
+  const [resetStep, setResetStep] = useState<"email" | "code">("email");
+  const [resetEmail, setResetEmail] = useState("");
+
+  function switchMode(next: "login" | "signup" | "reset") {
     setMode(next);
     setError(null);
     setNotice(null);
     setPasswordValue("");
+    setResetStep("email");
+    setResetEmail("");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -110,6 +123,46 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
 
   async function handleEmailOtpVerified() {
     setSignupStage("totp-offer");
+  }
+
+  async function handleResetRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setIsPending(true);
+
+    const email = String(new FormData(event.currentTarget).get("email") ?? "");
+    const { error: resetError } = await requestPasswordReset(email);
+
+    setIsPending(false);
+    if (resetError) {
+      setError(resetError);
+      return;
+    }
+    setResetEmail(email);
+    setResetStep("code");
+  }
+
+  async function handleResetConfirm(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+
+    const code = String(new FormData(event.currentTarget).get("code") ?? "");
+    if (!isPasswordStrongEnough(passwordValue)) {
+      setError("La contraseña no es lo suficientemente segura. Revisa los requisitos de abajo.");
+      return;
+    }
+
+    setIsPending(true);
+    const { error: resetError } = await resetPasswordWithCode(resetEmail, code, passwordValue);
+    setIsPending(false);
+
+    if (resetError) {
+      setError(resetError);
+      return;
+    }
+
+    switchMode("login");
+    setNotice("password-reset");
   }
 
   async function handleActivateTotp() {
@@ -305,6 +358,84 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
               Omitir y continuar
             </Button>
           </div>
+        ) : mode === "reset" ? (
+          <div className="w-full max-w-[360px] animate-fade-up">
+            <h2 className="mb-1.5 font-serif text-[32px] font-normal">Restablece tu contraseña</h2>
+            <p className="mb-8 text-sm text-ink-2">
+              {resetStep === "email"
+                ? "Escribe tu correo y te enviaremos un código de verificación."
+                : `Si existe una cuenta con ${resetEmail}, ya enviamos un código. Escríbelo y elige tu nueva contraseña.`}
+            </p>
+
+            {error ? (
+              <div className="mb-6 rounded-lg border border-neg/30 bg-neg-soft px-4 py-3 text-sm text-neg">{error}</div>
+            ) : null}
+
+            {resetStep === "email" ? (
+              <form onSubmit={handleResetRequest} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="reset-email">Correo</Label>
+                  <Input
+                    id="reset-email"
+                    name="email"
+                    type="email"
+                    placeholder="tu@correo.com"
+                    required
+                    autoComplete="email"
+                    autoFocus
+                    aria-invalid={Boolean(error)}
+                  />
+                </div>
+                <Button type="submit" disabled={isPending} className="login-shimmer h-auto w-full py-3 text-sm">
+                  {isPending ? "Enviando..." : "Enviar código →"}
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={handleResetConfirm} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="reset-code">Código de 6 dígitos</Label>
+                  <Input
+                    id="reset-code"
+                    name="code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    placeholder="123456"
+                    required
+                    autoFocus
+                    aria-invalid={Boolean(error)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="reset-password">Nueva contraseña</Label>
+                  <PasswordInput
+                    id="reset-password"
+                    placeholder="••••••••"
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    aria-invalid={Boolean(error)}
+                    value={passwordValue}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setPasswordValue(e.target.value)}
+                  />
+                  <PasswordStrengthMeter password={passwordValue} />
+                </div>
+                <Button type="submit" disabled={isPending} className="login-shimmer h-auto w-full py-3 text-sm">
+                  {isPending ? "Guardando..." : "Cambiar contraseña →"}
+                </Button>
+              </form>
+            )}
+
+            <p className="mt-6.5 text-center text-[13px] text-ink-3">
+              <button
+                type="button"
+                onClick={() => switchMode("login")}
+                className="font-semibold text-ink underline-offset-4 hover:underline"
+              >
+                ← Volver al inicio de sesión
+              </button>
+            </p>
+          </div>
         ) : (
           <div className="w-full max-w-[360px]">
             <h2 className="animate-auth-up mb-1.5 font-serif text-[32px] font-normal" style={{ animationDelay: "0.02s" }}>
@@ -322,6 +453,11 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
             {notice === "confirm-email" ? (
               <div className="mb-6 rounded-lg border border-gold/30 bg-gold-soft px-4 py-3 text-sm text-gold">
                 Revisa tu correo para confirmar tu cuenta antes de iniciar sesión.
+              </div>
+            ) : null}
+            {notice === "password-reset" ? (
+              <div className="mb-6 rounded-lg border border-pos/30 bg-pos-soft px-4 py-3 text-sm text-pos">
+                Tu contraseña fue actualizada. Inicia sesión con la nueva.
               </div>
             ) : null}
 
@@ -352,6 +488,17 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
                   onChange={(e: ChangeEvent<HTMLInputElement>) => setPasswordValue(e.target.value)}
                 />
                 {mode === "signup" ? <PasswordStrengthMeter password={passwordValue} /> : null}
+                {mode === "login" ? (
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={() => switchMode("reset")}
+                      className="text-xs text-ink-3 underline-offset-4 hover:text-ink hover:underline"
+                    >
+                      ¿Olvidaste tu contraseña?
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
               <Button
