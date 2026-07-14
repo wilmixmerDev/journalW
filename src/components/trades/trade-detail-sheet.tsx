@@ -176,6 +176,12 @@ export function TradeDetailSheet() {
                     {trade.exitedAt ? formatDateTime(trade.exitedAt) : "—"}
                   </p>
                 </div>
+                {trade.journalType === "backtest" ? (
+                  <div>
+                    <p>Registrada el</p>
+                    <p className="font-mono text-ink-2">{formatDateTime(trade.createdAt)}</p>
+                  </div>
+                ) : null}
               </div>
             </div>
           </>

@@ -18,8 +18,16 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MetricCard } from "@/components/shared/metric-card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useJournalTrades } from "@/hooks/use-journal-trades";
+import { useJournalStore } from "@/store/journal-store";
 import { computeMetrics } from "@/lib/metrics";
 import { formatPercent, formatSignedPercent } from "@/lib/format";
 import type { Trade } from "@/types/trade";
@@ -31,8 +39,14 @@ interface CalendarClientProps {
 
 const WEEKDAY_LABELS = ["L", "M", "X", "J", "V", "S", "D"];
 
+const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => ({
+  value: String(i),
+  label: format(new Date(2000, i, 1), "MMMM", { locale: es }),
+}));
+
 export function CalendarClient({ live, backtest }: CalendarClientProps) {
   const trades = useJournalTrades(live, backtest);
+  const journalType = useJournalStore((s) => s.journalType);
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
 
   const dayMap = useMemo(() => {
@@ -67,6 +81,36 @@ export function CalendarClient({ live, backtest }: CalendarClientProps) {
     return max || 1;
   }, [dayMap]);
 
+  // Seguimiento de práctica: días REALES en los que se registraron operaciones de backtesting
+  // (createdAt), independiente de la fecha histórica de la operación (enteredAt).
+  const practiceDays = useMemo(() => {
+    const set = new Set<string>();
+    if (journalType !== "backtest") return set;
+    for (const trade of trades) {
+      set.add(format(new Date(trade.createdAt), "yyyy-MM-dd"));
+    }
+    return set;
+  }, [trades, journalType]);
+
+  const monthPracticeDays = useMemo(() => {
+    const prefix = format(month, "yyyy-MM");
+    let count = 0;
+    for (const key of practiceDays) if (key.startsWith(prefix)) count++;
+    return count;
+  }, [practiceDays, month]);
+
+  // El rango de años se arma desde la operación más antigua (histórica) hasta hoy.
+  const yearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    let minYear = currentYear;
+    for (const trade of trades) {
+      const y = new Date(trade.enteredAt).getFullYear();
+      if (y < minYear) minYear = y;
+    }
+    minYear = Math.min(minYear, currentYear - 5);
+    return Array.from({ length: currentYear - minYear + 1 }, (_, i) => String(currentYear - i));
+  }, [trades]);
+
   return (
     <div className="space-y-6 p-4 lg:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -74,7 +118,39 @@ export function CalendarClient({ live, backtest }: CalendarClientProps) {
           <h1 className="font-serif text-3xl text-ink">Calendario</h1>
           <p className="text-sm text-ink-2 capitalize">{format(month, "MMMM yyyy", { locale: es })}</p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {/* Salto directo a cualquier mes/año, sin tener que ir flecha por flecha. */}
+          <Select
+            items={MONTH_OPTIONS}
+            value={String(month.getMonth())}
+            onValueChange={(v) => v && setMonth(new Date(month.getFullYear(), Number(v), 1))}
+          >
+            <SelectTrigger className="w-32 capitalize">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MONTH_OPTIONS.map((m) => (
+                <SelectItem key={m.value} value={m.value} className="capitalize">
+                  {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={String(month.getFullYear())}
+            onValueChange={(v) => v && setMonth(new Date(Number(v), month.getMonth(), 1))}
+          >
+            <SelectTrigger className="w-24">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {yearOptions.map((y) => (
+                <SelectItem key={y} value={y}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="icon" onClick={() => setMonth((m) => subMonths(m, 1))}>
             <ChevronLeft className="size-4" />
           </Button>
@@ -95,11 +171,16 @@ export function CalendarClient({ live, backtest }: CalendarClientProps) {
         />
         <MetricCard label="Operaciones" value={String(monthMetrics.totalTrades)} />
         <MetricCard label="Win Rate" value={formatPercent(monthMetrics.winRate)} />
-        <MetricCard
-          label="Mejor racha"
-          value={String(monthMetrics.bestWinStreak)}
-          tone="gold"
-        />
+        {journalType === "backtest" ? (
+          <MetricCard
+            label="Días de práctica"
+            value={String(monthPracticeDays)}
+            tone="gold"
+            hint="días con backtesting este mes"
+          />
+        ) : (
+          <MetricCard label="Mejor racha" value={String(monthMetrics.bestWinStreak)} tone="gold" />
+        )}
       </div>
 
       <Card className="border-line bg-surface">
@@ -137,8 +218,16 @@ export function CalendarClient({ live, backtest }: CalendarClientProps) {
                       : undefined
                   }
                 >
-                  <span className={cn("font-mono", inMonth ? "text-ink-2" : "text-ink-3")}>
-                    {format(day, "d")}
+                  <span className="flex items-start justify-between gap-1">
+                    <span className={cn("font-mono", inMonth ? "text-ink-2" : "text-ink-3")}>
+                      {format(day, "d")}
+                    </span>
+                    {practiceDays.has(key) ? (
+                      <span
+                        className="mt-0.5 size-1.5 shrink-0 rounded-full bg-gold"
+                        title="Ese día registraste backtesting"
+                      />
+                    ) : null}
                   </span>
                   {dayTrades.length > 0 ? (
                     <div className="text-right">
@@ -157,6 +246,13 @@ export function CalendarClient({ live, backtest }: CalendarClientProps) {
               );
             })}
           </div>
+          {journalType === "backtest" ? (
+            <p className="mt-3 flex items-center gap-2 text-xs text-ink-3">
+              <span className="size-1.5 shrink-0 rounded-full bg-gold" />
+              Día en que hiciste backtesting. Las casillas coloreadas muestran las operaciones en su fecha
+              histórica.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
     </div>

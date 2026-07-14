@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { CreatableSelect, CreatableMultiSelect } from "@/components/ui/creatable-select";
 import { ScreenshotUploader } from "@/components/trades/screenshot-uploader";
+import { cn } from "@/lib/utils";
 import { useAnimatedNumber } from "@/hooks/use-animated-number";
 import { useUIStore } from "@/store/ui-store";
 import { useJournalStore } from "@/store/journal-store";
@@ -449,6 +450,42 @@ export function NewTradeDialog() {
               : "Registra los detalles de tu operación cerrada."}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Aviso destacado del journal destino: el switch Live/Backtest es sutil y es fácil olvidar en cuál se está.
+            Usa las dos variantes de color del isotipo (caja oscura / caja dorada) como la señal visual principal,
+            en vez de un ícono genérico — así el aviso se siente parte de la marca, no un banner cualquiera. */}
+        {(() => {
+          const targetJournal = editingTrade ? editingTrade.journalType : journalType;
+          const isLive = targetJournal === "live";
+          return (
+            <div
+              className={cn(
+                "flex items-center gap-3.5 rounded-xl border px-4 py-3",
+                isLive ? "border-pos/30 bg-pos-soft" : "border-gold/30 bg-gold-soft"
+              )}
+            >
+              <div className="relative shrink-0">
+                {isLive ? (
+                  <span className="absolute -inset-1 animate-ping rounded-xl bg-pos/25" />
+                ) : null}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={isLive ? "/brand/icon-light.svg" : "/brand/icon-dark.svg"}
+                  alt=""
+                  className="relative size-10 rounded-[10px]"
+                />
+              </div>
+              <div className="min-w-0">
+                <p className={cn("text-sm font-semibold", isLive ? "text-pos" : "text-gold")}>
+                  {isLive ? "Journal en vivo" : "Backtesting"}
+                </p>
+                <p className="text-xs text-ink-2">
+                  {editingTrade ? "Estás editando una operación de este journal." : "Esta operación se guardará aquí."}
+                </p>
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs text-ink-2">
