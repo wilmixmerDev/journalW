@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { CreatableSelect, CreatableMultiSelect } from "@/components/ui/creatable-select";
 import { ScreenshotUploader } from "@/components/trades/screenshot-uploader";
+import { Notice } from "@/components/ui/notice";
 import { cn } from "@/lib/utils";
 import { useAnimatedNumber } from "@/hooks/use-animated-number";
 import { useUIStore } from "@/store/ui-store";
@@ -498,11 +499,7 @@ export function NewTradeDialog() {
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {serverError ? (
-            <p className="rounded-md border border-neg/30 bg-neg-soft px-3 py-2 text-xs text-neg">
-              {serverError}
-            </p>
-          ) : null}
+          {serverError ? <Notice variant="error">{serverError}</Notice> : null}
 
           <div key={step} className="animate-step-in space-y-4">
           {step === 0 ? (

@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { COUNTRIES } from "@/lib/countries";
 import { MARKETS, EXPERIENCE_LEVELS, TIMEZONES } from "@/lib/onboarding-options";
+import { Notice } from "@/components/ui/notice";
 import { completeOnboarding } from "./actions";
 
 const NAME_REGEX = /^[\p{L}][\p{L}\s'-]*$/u;
@@ -167,9 +168,7 @@ export function OnboardingForm() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-5">
-        {serverError ? (
-          <p className="rounded-md border border-neg/30 bg-neg-soft px-3 py-2 text-xs text-neg">{serverError}</p>
-        ) : null}
+        {serverError ? <Notice variant="error">{serverError}</Notice> : null}
 
         {step === 0 ? (
           <div className="animate-fade-in space-y-5">

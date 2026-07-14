@@ -6,6 +6,7 @@ import { ArrowRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { PasswordStrengthMeter, isPasswordStrongEnough } from "@/components/ui/password-strength";
+import { Notice } from "@/components/ui/notice";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
@@ -50,6 +51,7 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
   // Recuperación de contraseña: paso 1 pide el correo, paso 2 pide el código recibido + la contraseña nueva.
   const [resetStep, setResetStep] = useState<"email" | "code">("email");
   const [resetEmail, setResetEmail] = useState("");
+  const [resetCode, setResetCode] = useState("");
 
   function switchMode(next: "login" | "signup" | "reset") {
     setMode(next);
@@ -58,6 +60,7 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
     setPasswordValue("");
     setResetStep("email");
     setResetEmail("");
+    setResetCode("");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -146,14 +149,13 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
     event.preventDefault();
     setError(null);
 
-    const code = String(new FormData(event.currentTarget).get("code") ?? "");
     if (!isPasswordStrongEnough(passwordValue)) {
       setError("La contraseña no es lo suficientemente segura. Revisa los requisitos de abajo.");
       return;
     }
 
     setIsPending(true);
-    const { error: resetError } = await resetPasswordWithCode(resetEmail, code, passwordValue);
+    const { error: resetError } = await resetPasswordWithCode(resetEmail, resetCode, passwordValue);
     setIsPending(false);
 
     if (resetError) {
@@ -339,9 +341,7 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
                 <p className="rounded-md border border-line bg-surface-2 px-3 py-2 text-center font-mono text-xs break-all text-ink-2">
                   {enrollment.secret}
                 </p>
-                {mfaError ? (
-                  <p className="rounded-md border border-neg/30 bg-neg-soft px-3 py-2 text-xs text-neg">{mfaError}</p>
-                ) : null}
+                {mfaError ? <Notice variant="error">{mfaError}</Notice> : null}
                 <Input
                   inputMode="numeric"
                   autoComplete="one-time-code"
@@ -368,7 +368,9 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
             </p>
 
             {error ? (
-              <div className="mb-6 rounded-lg border border-neg/30 bg-neg-soft px-4 py-3 text-sm text-neg">{error}</div>
+              <div className="mb-6">
+                <Notice variant="error">{error}</Notice>
+              </div>
             ) : null}
 
             {resetStep === "email" ? (
@@ -391,7 +393,21 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
                 </Button>
               </form>
             ) : (
-              <form onSubmit={handleResetConfirm} className="space-y-4">
+              <form onSubmit={handleResetConfirm} className="space-y-4" autoComplete="off">
+                {/* Señuelo oculto: sin esto, Chrome/Brave detectan "campo de texto + campo de contraseña"
+                    en el mismo form y rellenan el de código con el correo guardado del sitio. Al darle
+                    un campo "username" real (aunque invisible) donde meter ese autocompletado, dejan
+                    en paz el campo del código. */}
+                <input
+                  type="text"
+                  name="username"
+                  autoComplete="username"
+                  value={resetEmail}
+                  readOnly
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  className="hidden"
+                />
                 <div className="space-y-1.5">
                   <Label htmlFor="reset-code">Código de 6 dígitos</Label>
                   <Input
@@ -404,6 +420,8 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
                     required
                     autoFocus
                     aria-invalid={Boolean(error)}
+                    value={resetCode}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setResetCode(e.target.value.replace(/\D/g, ""))}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -448,16 +466,18 @@ export function LoginForm({ errorMessage, notice: initialNotice }: LoginFormProp
             </p>
 
             {error ? (
-              <div className="mb-6 rounded-lg border border-neg/30 bg-neg-soft px-4 py-3 text-sm text-neg">{error}</div>
+              <div className="mb-6">
+                <Notice variant="error">{error}</Notice>
+              </div>
             ) : null}
             {notice === "confirm-email" ? (
-              <div className="mb-6 rounded-lg border border-gold/30 bg-gold-soft px-4 py-3 text-sm text-gold">
-                Revisa tu correo para confirmar tu cuenta antes de iniciar sesión.
+              <div className="mb-6">
+                <Notice variant="warning">Revisa tu correo para confirmar tu cuenta antes de iniciar sesión.</Notice>
               </div>
             ) : null}
             {notice === "password-reset" ? (
-              <div className="mb-6 rounded-lg border border-pos/30 bg-pos-soft px-4 py-3 text-sm text-pos">
-                Tu contraseña fue actualizada. Inicia sesión con la nueva.
+              <div className="mb-6">
+                <Notice variant="success">Tu contraseña fue actualizada. Inicia sesión con la nueva.</Notice>
               </div>
             ) : null}
 

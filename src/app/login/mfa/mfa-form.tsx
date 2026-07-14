@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { EmailOtpChallenge } from "@/components/mfa/email-otp-challenge";
+import { Notice } from "@/components/ui/notice";
 import { sendAuthEmailOtp, verifyAuthEmailOtp, checkAuthEmailOtpVerified } from "@/app/login/actions";
 
 interface MfaFormProps {
@@ -89,7 +90,9 @@ export function MfaForm({ totpFactorId, email }: MfaFormProps) {
         <>
           <p className="mt-2 text-sm text-ink-2">Elige cómo quieres verificar tu identidad.</p>
           {error ? (
-            <div className="mt-6 rounded-lg border border-neg/30 bg-neg-soft px-4 py-3 text-sm text-neg">{error}</div>
+            <div className="mt-6">
+              <Notice variant="error">{error}</Notice>
+            </div>
           ) : null}
           <div className="mt-8 space-y-2">
             <Button type="button" className="w-full" onClick={chooseEmail}>
@@ -104,7 +107,9 @@ export function MfaForm({ totpFactorId, email }: MfaFormProps) {
         <>
           <p className="mt-2 text-sm text-ink-2">Ingresa el código de tu app autenticadora.</p>
           {error ? (
-            <div className="mt-6 rounded-lg border border-neg/30 bg-neg-soft px-4 py-3 text-sm text-neg">{error}</div>
+            <div className="mt-6">
+              <Notice variant="error">{error}</Notice>
+            </div>
           ) : null}
           <form onSubmit={handleTotpSubmit} className="mt-8 space-y-4">
             <div className="space-y-1.5">

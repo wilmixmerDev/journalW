@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { enrollTotp, type TotpEnrollment } from "@/lib/mfa/enroll-totp";
+import { Notice } from "@/components/ui/notice";
 
 interface EnrollTotpDialogProps {
   open: boolean;
@@ -86,7 +87,7 @@ export function EnrollTotpDialog({ open, onOpenChange }: EnrollTotpDialogProps) 
           <DialogDescription>Escanea el código QR y confírmalo con el código de 6 dígitos.</DialogDescription>
         </DialogHeader>
 
-        {error ? <p className="rounded-md border border-neg/30 bg-neg-soft px-3 py-2 text-xs text-neg">{error}</p> : null}
+        {error ? <Notice variant="error">{error}</Notice> : null}
 
         {enrollment ? (
           <div className="space-y-4">

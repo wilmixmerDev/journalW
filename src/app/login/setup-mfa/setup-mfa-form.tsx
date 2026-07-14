@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { EmailOtpChallenge } from "@/components/mfa/email-otp-challenge";
+import { Notice } from "@/components/ui/notice";
 import { enrollTotp, type TotpEnrollment } from "@/lib/mfa/enroll-totp";
 import { sendAuthEmailOtp, verifyAuthEmailOtp, checkAuthEmailOtpVerified } from "@/app/login/actions";
 
@@ -113,7 +114,9 @@ export function SetupMfaForm({ email, initialStage = "email-otp" }: SetupMfaForm
           (Google Authenticator, Authy...) para verificarte más rápido en cada inicio de sesión.
         </p>
         {error ? (
-          <div className="mt-6 rounded-lg border border-neg/30 bg-neg-soft px-4 py-3 text-sm text-neg">{error}</div>
+          <div className="mt-6">
+            <Notice variant="error">{error}</Notice>
+          </div>
         ) : null}
         <div className="mt-6 space-y-2">
           <Button type="button" className="w-full" onClick={handleActivateTotp}>
@@ -135,7 +138,9 @@ export function SetupMfaForm({ email, initialStage = "email-otp" }: SetupMfaForm
       </p>
 
       {error ? (
-        <div className="mt-6 rounded-lg border border-neg/30 bg-neg-soft px-4 py-3 text-sm text-neg">{error}</div>
+        <div className="mt-6">
+          <Notice variant="error">{error}</Notice>
+        </div>
       ) : null}
 
       {enrollment ? (

@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Notice } from "@/components/ui/notice";
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { JournalSwitch } from "@/components/app-shell/journal-switch";
@@ -71,8 +72,10 @@ export function Sidebar({ email, displayName, isDemo, isAdmin }: SidebarProps) {
       </nav>
 
       {isDemo ? (
-        <div className="mx-4 mb-4 rounded-lg border border-gold/30 bg-gold-soft px-3 py-2 text-xs text-gold">
-          Modo demo con datos de ejemplo. Conecta Supabase para guardar tus operaciones reales.
+        <div className="mx-4 mb-4">
+          <Notice variant="warning" className="text-xs">
+            Modo demo con datos de ejemplo. Conecta Supabase para guardar tus operaciones reales.
+          </Notice>
         </div>
       ) : null}
 

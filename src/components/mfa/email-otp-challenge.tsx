@@ -5,6 +5,7 @@ import { CircleCheckIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 
 const RESEND_COOLDOWN_SECONDS = 30;
 const POLL_INTERVAL_MS = 2500;
@@ -136,9 +137,9 @@ export function EmailOtpChallenge({
       </div>
 
       {error ? (
-        <p className="animate-fade-up rounded-md border border-neg/30 bg-neg-soft px-3 py-2 text-xs text-neg">
-          {error}
-        </p>
+        <div className="animate-fade-up">
+          <Notice variant="error">{error}</Notice>
+        </div>
       ) : null}
 
       <Button

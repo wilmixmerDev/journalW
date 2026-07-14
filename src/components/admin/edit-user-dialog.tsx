@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { COUNTRIES } from "@/lib/countries";
 import { MARKETS, EXPERIENCE_LEVELS, TIMEZONES } from "@/lib/onboarding-options";
+import { Notice } from "@/components/ui/notice";
 import { updateUserProfileAsAdmin, type AdminUserRow, type AdminProfileInput } from "@/app/(app)/admin/actions";
 
 interface EditUserDialogProps {
@@ -73,7 +74,7 @@ export function EditUserDialog({ open, onOpenChange, user, onSaved }: EditUserDi
           <DialogDescription>{user.email}</DialogDescription>
         </DialogHeader>
 
-        {error ? <p className="rounded-md border border-neg/30 bg-neg-soft px-3 py-2 text-xs text-neg">{error}</p> : null}
+        {error ? <Notice variant="error">{error}</Notice> : null}
 
         <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">

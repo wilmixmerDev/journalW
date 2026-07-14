@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { resetUserPassword } from "@/app/(app)/admin/actions";
+import { Notice } from "@/components/ui/notice";
 
 interface ResetPasswordDialogProps {
   open: boolean;
@@ -58,7 +59,7 @@ export function ResetPasswordDialog({ open, onOpenChange, userId, userEmail }: R
           </DialogDescription>
         </DialogHeader>
 
-        {error ? <p className="rounded-md border border-neg/30 bg-neg-soft px-3 py-2 text-xs text-neg">{error}</p> : null}
+        {error ? <Notice variant="error">{error}</Notice> : null}
 
         {password ? (
           <div className="space-y-3">

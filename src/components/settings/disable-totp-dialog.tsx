@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { TwoFactorProofFields, type TwoFactorProof } from "@/components/settings/two-factor-proof-fields";
 import { disableTotp, sendSecurityEmailOtp } from "@/app/(app)/settings/actions";
+import { Notice } from "@/components/ui/notice";
 
 interface DisableTotpDialogProps {
   open: boolean;
@@ -52,7 +53,7 @@ export function DisableTotpDialog({ open, onOpenChange }: DisableTotpDialogProps
           <DialogDescription>Confirma tu identidad para desactivarla. Seguirás protegido por el correo.</DialogDescription>
         </DialogHeader>
 
-        {error ? <p className="rounded-md border border-neg/30 bg-neg-soft px-3 py-2 text-xs text-neg">{error}</p> : null}
+        {error ? <Notice variant="error">{error}</Notice> : null}
 
         <div className="space-y-4">
           <TwoFactorProofFields

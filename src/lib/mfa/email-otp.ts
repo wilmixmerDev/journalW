@@ -123,9 +123,12 @@ export async function sendEmailOtp(
 
 export async function verifyEmailOtp(
   userId: string,
-  code: string,
+  rawCode: string,
   purpose: EmailOtpPurpose
 ): Promise<{ error: string | null }> {
+  // Defensa adicional del lado del servidor: quita espacios u otros caracteres que un cliente
+  // distinto al formulario web (o un copy/paste con basura invisible) pudiera colar.
+  const code = rawCode.replace(/\D/g, "");
   const admin = createAdminClient();
 
   const { data: row, error } = await admin
