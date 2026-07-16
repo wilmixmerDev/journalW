@@ -45,7 +45,14 @@ export function CreatableSelect({
   className,
   disabled = false,
 }: CreatableSelectProps) {
-  const [query, setQuery] = React.useState("");
+  const [query, setQuery] = React.useState(value);
+
+  // Si el valor cambia desde afuera (ej. al aplicar un favorito), refleja el texto en el input.
+  const [prevValue, setPrevValue] = React.useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setQuery(value);
+  }
 
   const trimmed = query.trim();
   const exactExists = options.some((o) => o.toLowerCase() === trimmed.toLowerCase());
@@ -54,17 +61,18 @@ export function CreatableSelect({
   function handleValueChange(next: string | null) {
     if (!next) {
       onValueChange("");
+      setQuery("");
       return;
     }
     if (next.startsWith(CREATE_PREFIX)) {
       const name = next.slice(CREATE_PREFIX.length);
       onValueChange(name);
       onCreate?.(name);
-      setQuery("");
+      setQuery(name);
       return;
     }
     onValueChange(next);
-    setQuery("");
+    setQuery(next);
   }
 
   return (

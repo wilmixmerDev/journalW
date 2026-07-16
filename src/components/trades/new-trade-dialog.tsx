@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { Pencil, Star, X } from "lucide-react";
 import { useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -31,11 +32,14 @@ import {
   updateTrade,
   createTradeOption,
   getTradeOptions,
+  getTradePresets,
+  deleteTradePreset,
   type TradeOptionLists,
 } from "@/app/(app)/actions";
+import { TradePresetDialog } from "@/components/trades/trade-preset-dialog";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { DISCIPLINE_ITEMS, computeDisciplineScore } from "@/lib/discipline";
-import type { Trade, TradeScreenshot } from "@/types/trade";
+import type { Trade, TradePreset, TradeScreenshot } from "@/types/trade";
 
 const MARKETS = ["Forex", "Cripto", "Índices", "Acciones", "Materias primas", "Futuros"];
 const SESSIONS = ["Asia", "Londres", "Nueva York", "Solapamiento Londres-NY"];
@@ -216,6 +220,10 @@ export function NewTradeDialog() {
   const [options, setOptions] = useState<TradeOptionLists>(EMPTY_OPTIONS);
   const [step, setStep] = useState(0);
   const [justAdvanced, setJustAdvanced] = useState(false);
+  const [presets, setPresets] = useState<TradePreset[]>([]);
+  const [presetDialogOpen, setPresetDialogOpen] = useState(false);
+  const [editingPreset, setEditingPreset] = useState<TradePreset | null>(null);
+  const [appliedPresetId, setAppliedPresetId] = useState<string | null>(null);
 
   const {
     register,
@@ -242,6 +250,7 @@ export function NewTradeDialog() {
   useEffect(() => {
     if (!isOpen) return;
     getTradeOptions(journalType).then(setOptions);
+    getTradePresets(journalType).then(setPresets);
   }, [isOpen, journalType]);
 
   useEffect(() => {
@@ -295,7 +304,41 @@ export function NewTradeDialog() {
       setServerError(null);
       setStep(0);
       setJustAdvanced(false);
+      setAppliedPresetId(null);
     }
+  }
+
+  /** Rellena solo los campos que el favorito tiene guardados; el resto queda como esté. */
+  function applyPreset(preset: TradePreset) {
+    if (preset.market) {
+      setValue("market", preset.market, { shouldValidate: true });
+      // El instrumento del favorito manda; si no tiene, se limpia porque cambió el mercado.
+      setValue("instrument", preset.instrument ?? "", { shouldValidate: true });
+    } else if (preset.instrument) {
+      setValue("instrument", preset.instrument, { shouldValidate: true });
+    }
+    if (preset.strategy) setValue("strategy", preset.strategy, { shouldValidate: true });
+    if (preset.setup) setValue("setup", preset.setup, { shouldValidate: true });
+    if (preset.timeframe) setValue("timeframe", preset.timeframe, { shouldValidate: true });
+    if (preset.session) setValue("session", preset.session, { shouldValidate: true });
+    if (preset.disciplineChecklist.length > 0) {
+      setValue("disciplineChecklist", preset.disciplineChecklist, { shouldValidate: true });
+    }
+    setAppliedPresetId(preset.id);
+    toast.success(`Favorito "${preset.name}" aplicado`);
+  }
+
+  function removePreset(preset: TradePreset) {
+    setPresets((prev) => prev.filter((p) => p.id !== preset.id));
+    if (appliedPresetId === preset.id) setAppliedPresetId(null);
+    void deleteTradePreset(preset.id).then(({ error }) => {
+      if (error) {
+        toast.error(error);
+        getTradePresets(journalType).then(setPresets);
+        return;
+      }
+      toast.success("Favorito eliminado");
+    });
   }
 
   function cooldownAfterStepChange() {
@@ -504,6 +547,69 @@ export function NewTradeDialog() {
           <div key={step} className="animate-step-in space-y-4">
           {step === 0 ? (
             <>
+              {/* Favoritos: combinaciones guardadas que rellenan de un toque los campos repetitivos. */}
+              {!editingTrade ? (
+                <div className="space-y-1.5">
+                  <Label>Favoritos</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {presets.map((preset) => {
+                      const applied = appliedPresetId === preset.id;
+                      return (
+                        <div
+                          key={preset.id}
+                          className={cn(
+                            "inline-flex items-center overflow-hidden rounded-lg border text-xs font-medium transition-colors",
+                            applied
+                              ? "border-gold/50 bg-gold-soft text-gold"
+                              : "border-line-2 bg-surface text-ink-2"
+                          )}
+                        >
+                          <button
+                            type="button"
+                            title={preset.name}
+                            onClick={() => applyPreset(preset)}
+                            className="flex items-center gap-1.5 py-1.5 pr-1.5 pl-3 hover:text-ink"
+                          >
+                            <Star className={cn("size-3.5 shrink-0", applied && "fill-gold")} />
+                            <span className="max-w-32 truncate">{preset.name}</span>
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Editar favorito ${preset.name}`}
+                            onClick={() => {
+                              setEditingPreset(preset);
+                              setPresetDialogOpen(true);
+                            }}
+                            className="px-1.5 py-1.5 text-ink-3 hover:text-ink"
+                          >
+                            <Pencil className="size-3" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Eliminar favorito ${preset.name}`}
+                            onClick={() => removePreset(preset)}
+                            className="px-1.5 py-1.5 text-ink-3 hover:text-neg"
+                          >
+                            <X className="size-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingPreset(null);
+                        setPresetDialogOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-line-2 px-3 py-1.5 text-xs font-medium text-ink-3 transition-colors hover:border-gold/50 hover:text-gold"
+                    >
+                      <Star className="size-3.5" />
+                      Nuevo favorito
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Mercado</Label>
@@ -869,6 +975,32 @@ export function NewTradeDialog() {
           </div>
         </form>
       </DialogContent>
+
+      <TradePresetDialog
+        open={presetDialogOpen}
+        onOpenChange={(open) => {
+          setPresetDialogOpen(open);
+          if (!open) setEditingPreset(null);
+        }}
+        journalType={journalType}
+        options={options}
+        preset={editingPreset}
+        onSaved={() => getTradePresets(journalType).then(setPresets)}
+        onCreateOption={(kind, name) => persistOption(kind, name)}
+        onCreateSetupOption={(strategyName, name) => {
+          setOptions((prev: TradeOptionLists) => {
+            const bucket = prev.setupsByStrategy[strategyName] ?? [];
+            return {
+              ...prev,
+              setupsByStrategy: {
+                ...prev.setupsByStrategy,
+                [strategyName]: bucket.includes(name) ? bucket : [...bucket, name],
+              },
+            };
+          });
+          void createTradeOption(journalType, "setup", name, strategyName);
+        }}
+      />
     </Dialog>
   );
 }

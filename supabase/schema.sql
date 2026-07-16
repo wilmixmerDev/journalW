@@ -80,6 +80,46 @@ drop policy if exists "trade_options_insert_own" on public.trade_options;
 create policy "trade_options_insert_own" on public.trade_options
   for insert with check (auth.uid() = user_id);
 
+-- Favoritos de autorrelleno: combinaciones frecuentes (mercado, instrumento, estrategia...) que el
+-- usuario guarda con nombre para rellenar el formulario de nueva operación de un toque.
+create table if not exists public.trade_presets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  journal_type text not null check (journal_type in ('live', 'backtest')),
+  name text not null,
+  market text,
+  instrument text,
+  strategy text,
+  setup text,
+  timeframe text,
+  session text,
+  discipline_checklist text[] not null default '{}',
+  created_at timestamptz not null default now(),
+  unique (user_id, journal_type, name)
+);
+
+grant select, insert, update, delete on public.trade_presets to anon, authenticated, service_role;
+
+create index if not exists trade_presets_lookup_idx on public.trade_presets (user_id, journal_type);
+
+alter table public.trade_presets enable row level security;
+
+drop policy if exists "trade_presets_select_own" on public.trade_presets;
+create policy "trade_presets_select_own" on public.trade_presets
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "trade_presets_insert_own" on public.trade_presets;
+create policy "trade_presets_insert_own" on public.trade_presets
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "trade_presets_update_own" on public.trade_presets;
+create policy "trade_presets_update_own" on public.trade_presets
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "trade_presets_delete_own" on public.trade_presets;
+create policy "trade_presets_delete_own" on public.trade_presets
+  for delete using (auth.uid() = user_id);
+
 create or replace function public.set_updated_at()
 returns trigger as $$
 begin

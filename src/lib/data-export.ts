@@ -1,4 +1,4 @@
-import { computeMetrics } from "@/lib/metrics";
+import { computeMetrics, realizedR } from "@/lib/metrics";
 import type { Trade } from "@/types/trade";
 import type { Profile } from "@/types/profile";
 
@@ -29,7 +29,8 @@ export function buildDataExport({ profile, email, live, backtest }: DataExportIn
 
 function formatTradeLine(t: Trade): string {
   const date = t.enteredAt?.slice(0, 10) ?? "?";
-  const r = t.rMultiple !== null ? `${t.rMultiple >= 0 ? "+" : ""}${t.rMultiple.toFixed(2)}R` : "—";
+  const rValue = realizedR(t);
+  const r = t.rMultiple !== null ? `${rValue >= 0 ? "+" : ""}${rValue.toFixed(2)}R` : "—";
   const pnl = t.pnl !== null ? `${t.pnl >= 0 ? "+" : ""}${t.pnl.toFixed(2)}%` : "—";
   const direction = t.direction === "long" ? "Long" : "Short";
   return `${date} | ${t.instrument} | ${direction} | ${t.resultType ?? t.status} | ${r} | ${pnl}`;

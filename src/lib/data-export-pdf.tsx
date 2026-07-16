@@ -1,5 +1,5 @@
 import { Document, Page, View, Text, StyleSheet, pdf, Svg, Rect, Line, Path } from "@react-pdf/renderer";
-import { computeMetrics } from "@/lib/metrics";
+import { computeMetrics, realizedR } from "@/lib/metrics";
 import type { Trade } from "@/types/trade";
 import type { Profile } from "@/types/profile";
 import type { DataExportInput } from "@/lib/data-export";
@@ -130,7 +130,8 @@ function resultTone(t: Trade): string {
 
 function formatTradeRow(t: Trade) {
   const date = t.enteredAt?.slice(0, 10) ?? "?";
-  const r = t.rMultiple !== null ? `${t.rMultiple >= 0 ? "+" : ""}${t.rMultiple.toFixed(2)}R` : "—";
+  const rValue = realizedR(t);
+  const r = t.rMultiple !== null ? `${rValue >= 0 ? "+" : ""}${rValue.toFixed(2)}R` : "—";
   const pnl = t.pnl !== null ? `${t.pnl >= 0 ? "+" : ""}${t.pnl.toFixed(2)}%` : "—";
   const resultKey = t.resultType ?? t.status;
   return {
@@ -140,6 +141,7 @@ function formatTradeRow(t: Trade) {
     result: RESULT_LABELS[resultKey] ?? resultKey,
     resultColor: resultTone(t),
     r,
+    rValue,
     pnl,
     pnlValue: t.pnl ?? 0,
   };
@@ -177,7 +179,7 @@ function TradesTable({ trades }: { trades: Trade[] }) {
               </View>
             </View>
             <Text style={[styles.td, styles.cellPad, styles.colResult, { color: row.resultColor }]}>{row.result}</Text>
-            <Text style={[styles.td, styles.cellPad, styles.colR, { color: statTone(trade.rMultiple ?? 0) }]}>{row.r}</Text>
+            <Text style={[styles.td, styles.cellPad, styles.colR, { color: statTone(row.rValue) }]}>{row.r}</Text>
             <Text style={[styles.td, styles.cellPad, styles.colPnl, { color: statTone(row.pnlValue) }]}>{row.pnl}</Text>
           </View>
         );

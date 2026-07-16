@@ -6,7 +6,14 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { EMAIL_MFA_SESSION_COOKIE, revokeEmailMfaSessions } from "@/lib/mfa/email-otp";
-import { tradeToInsert, type JournalType, type Trade, type TradeOptionKind } from "@/types/trade";
+import {
+  tradeToInsert,
+  tradePresetFromRow,
+  type JournalType,
+  type Trade,
+  type TradeOptionKind,
+  type TradePreset,
+} from "@/types/trade";
 
 export async function signOut() {
   if (isSupabaseConfigured()) {
@@ -150,6 +157,121 @@ export async function getTradeOptions(journalType: JournalType): Promise<TradeOp
     }
   }
   return result;
+}
+
+export interface TradePresetInput {
+  name: string;
+  market: string | null;
+  instrument: string | null;
+  strategy: string | null;
+  setup: string | null;
+  timeframe: string | null;
+  session: string | null;
+  disciplineChecklist: string[];
+}
+
+export async function getTradePresets(journalType: JournalType): Promise<TradePreset[]> {
+  if (!isSupabaseConfigured()) return [];
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("trade_presets")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("journal_type", journalType)
+    .order("created_at", { ascending: true });
+
+  if (error || !data) return [];
+  return data.map(tradePresetFromRow);
+}
+
+const PRESET_NAME_MAX_LENGTH = 24;
+
+export async function createTradePreset(
+  journalType: JournalType,
+  input: TradePresetInput
+): Promise<{ error: string | null }> {
+  const name = input.name.trim().slice(0, PRESET_NAME_MAX_LENGTH);
+  if (!name) return { error: "Ponle un nombre al favorito." };
+  if (!isSupabaseConfigured()) return { error: "Conecta Supabase para guardar favoritos." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Debes iniciar sesión." };
+
+  const { error } = await supabase.from("trade_presets").insert({
+    user_id: user.id,
+    journal_type: journalType,
+    name,
+    market: input.market,
+    instrument: input.instrument,
+    strategy: input.strategy,
+    setup: input.setup,
+    timeframe: input.timeframe,
+    session: input.session,
+    discipline_checklist: input.disciplineChecklist,
+  });
+
+  if (error) {
+    if (error.code === "23505") return { error: "Ya tienes un favorito con ese nombre." };
+    return { error: error.message };
+  }
+  return { error: null };
+}
+
+export async function updateTradePreset(
+  id: string,
+  input: TradePresetInput
+): Promise<{ error: string | null }> {
+  const name = input.name.trim().slice(0, PRESET_NAME_MAX_LENGTH);
+  if (!name) return { error: "Ponle un nombre al favorito." };
+  if (!isSupabaseConfigured()) return { error: "Conecta Supabase para guardar favoritos." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Debes iniciar sesión." };
+
+  const { error } = await supabase
+    .from("trade_presets")
+    .update({
+      name,
+      market: input.market,
+      instrument: input.instrument,
+      strategy: input.strategy,
+      setup: input.setup,
+      timeframe: input.timeframe,
+      session: input.session,
+      discipline_checklist: input.disciplineChecklist,
+    })
+    .eq("id", id);
+
+  if (error) {
+    if (error.code === "23505") return { error: "Ya tienes un favorito con ese nombre." };
+    return { error: error.message };
+  }
+  return { error: null };
+}
+
+export async function deleteTradePreset(id: string): Promise<{ error: string | null }> {
+  if (!isSupabaseConfigured()) return { error: null };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Debes iniciar sesión." };
+
+  const { error } = await supabase.from("trade_presets").delete().eq("id", id);
+  return { error: error?.message ?? null };
 }
 
 export async function createTradeOption(

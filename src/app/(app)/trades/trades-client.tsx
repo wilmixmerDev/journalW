@@ -33,6 +33,7 @@ import { useJournalTrades } from "@/hooks/use-journal-trades";
 import { useUIStore } from "@/store/ui-store";
 import { deleteTrade } from "@/app/(app)/actions";
 import { formatDate, formatR, formatSignedPercent } from "@/lib/format";
+import { realizedR } from "@/lib/metrics";
 import type { Trade } from "@/types/trade";
 
 interface TradesClientProps {
@@ -156,7 +157,7 @@ export function TradesClient({ live, backtest }: TradesClientProps) {
                     <TableCell className="text-ink-2">{formatDate(trade.enteredAt)}</TableCell>
                     <TableCell className="text-ink-2">{trade.strategy ?? "—"}</TableCell>
                     <TableCell className={cn("text-right font-mono", win ? "text-pos" : "text-neg")}>
-                      {formatR(trade.rMultiple ?? 0)}
+                      {formatR(realizedR(trade))}
                     </TableCell>
                     <TableCell className={cn("text-right font-mono", win ? "text-pos" : "text-neg")}>
                       {formatSignedPercent(trade.pnl ?? 0)}

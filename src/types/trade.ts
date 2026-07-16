@@ -117,6 +117,37 @@ export function tradeToInsert(trade: Partial<Trade> & { userId: string }): Trade
 
 export type TradeOptionKind = "setup" | "strategy" | "tag" | "timeframe";
 
+export type TradePresetRow = Database["public"]["Tables"]["trade_presets"]["Row"];
+
+/** Favorito de autorrelleno: los campos que el usuario repite siempre, guardados con nombre. */
+export interface TradePreset {
+  id: string;
+  journalType: JournalType;
+  name: string;
+  market: string | null;
+  instrument: string | null;
+  strategy: string | null;
+  setup: string | null;
+  timeframe: string | null;
+  session: string | null;
+  disciplineChecklist: string[];
+}
+
+export function tradePresetFromRow(row: TradePresetRow): TradePreset {
+  return {
+    id: row.id,
+    journalType: row.journal_type,
+    name: row.name,
+    market: row.market,
+    instrument: row.instrument,
+    strategy: row.strategy,
+    setup: row.setup,
+    timeframe: row.timeframe,
+    session: row.session,
+    disciplineChecklist: row.discipline_checklist,
+  };
+}
+
 export interface TradeOption {
   id: string;
   userId: string;

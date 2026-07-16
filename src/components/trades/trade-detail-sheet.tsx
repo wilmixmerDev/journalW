@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { useUIStore } from "@/store/ui-store";
 import { formatDateTime, formatR, formatSignedPercent } from "@/lib/format";
+import { realizedR } from "@/lib/metrics";
 import { cn } from "@/lib/utils";
 import { DISCIPLINE_ITEMS } from "@/lib/discipline";
 import type { Quality, ScreenshotCategory } from "@/types/trade";
@@ -49,7 +50,7 @@ export function TradeDetailSheet() {
             <div className="flex-1 space-y-6 overflow-y-auto px-4 pb-4">
               <div className="grid grid-cols-2 gap-3">
                 <Stat label="P&L" value={formatSignedPercent(trade.pnl ?? 0)} tone={win ? "pos" : "neg"} />
-                <Stat label="R-Multiple" value={formatR(trade.rMultiple ?? 0)} tone={win ? "pos" : "neg"} />
+                <Stat label="R-Multiple" value={formatR(realizedR(trade))} tone={win ? "pos" : "neg"} />
                 <Stat label="Riesgo" value={`${trade.riskPercent}%`} />
                 <Stat
                   label="Resultado"

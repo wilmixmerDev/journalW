@@ -97,6 +97,38 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["trade_options"]["Insert"]>;
         Relationships: [];
       };
+      trade_presets: {
+        Row: {
+          id: string;
+          user_id: string;
+          journal_type: "live" | "backtest";
+          name: string;
+          market: string | null;
+          instrument: string | null;
+          strategy: string | null;
+          setup: string | null;
+          timeframe: string | null;
+          session: string | null;
+          discipline_checklist: string[];
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          journal_type: "live" | "backtest";
+          name: string;
+          market?: string | null;
+          instrument?: string | null;
+          strategy?: string | null;
+          setup?: string | null;
+          timeframe?: string | null;
+          session?: string | null;
+          discipline_checklist?: string[];
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["trade_presets"]["Insert"]>;
+        Relationships: [];
+      };
       profiles: {
         Row: {
           id: string;

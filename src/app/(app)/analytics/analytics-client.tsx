@@ -111,19 +111,35 @@ export function AnalyticsClient({ live, backtest, profile, email }: AnalyticsCli
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <MetricCard label="Expectancy" value={metrics.expectancy.toFixed(2)} tone="gold" />
+        <MetricCard
+          label="Expectancy"
+          value={metrics.expectancy.toFixed(2)}
+          tone="gold"
+          hint="R que esperas ganar en promedio por cada operación"
+        />
         <MetricCard
           label="Profit Factor"
           value={metrics.profitFactor !== null ? metrics.profitFactor.toFixed(2) : "—"}
+          hint={
+            metrics.profitFactor !== null
+              ? "Ganancia bruta ÷ pérdida bruta"
+              : "Sin pérdidas registradas todavía"
+          }
         />
         <MetricCard
           label="Total R"
           value={`${metrics.totalR >= 0 ? "+" : ""}${metrics.totalR.toFixed(1)}R`}
           tone={metrics.totalR >= 0 ? "pos" : "neg"}
+          hint="Suma de las R ganadas y perdidas en todas tus operaciones"
         />
         <MetricCard
           label="Risk / Reward"
           value={metrics.riskReward !== null ? metrics.riskReward.toFixed(2) : "—"}
+          hint={
+            metrics.riskReward !== null
+              ? "Promedio de R ganado ÷ promedio de R perdido"
+              : "Sin pérdidas registradas todavía"
+          }
         />
       </div>
 

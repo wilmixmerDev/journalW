@@ -26,6 +26,13 @@ export interface TradeMetrics {
 const closedTrades = (trades: Trade[]) =>
   trades.filter((t) => t.status === "closed" && t.pnl !== null);
 
+/**
+ * R realmente conseguido en la operación, con signo.
+ * `rMultiple` se guarda siempre positivo (es "R objetivo/conseguido" que carga el usuario),
+ * así que el signo real hay que derivarlo del P&L contra el riesgo arriesgado.
+ */
+export const realizedR = (t: Trade) => (t.riskPercent ? (t.pnl ?? 0) / t.riskPercent : 0);
+
 export function computeMetrics(trades: Trade[]): TradeMetrics {
   const closed = closedTrades(trades);
   const totalTrades = closed.length;
@@ -41,12 +48,12 @@ export function computeMetrics(trades: Trade[]): TradeMetrics {
   const winRate = totalTrades ? (wins / totalTrades) * 100 : 0;
   const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : null;
 
-  const rValues = closed.map((t) => t.rMultiple ?? 0);
+  const rValues = closed.map(realizedR);
   const totalR = rValues.reduce((sum, r) => sum + r, 0);
   const avgR = totalTrades ? totalR / totalTrades : 0;
 
-  const winRs = closed.filter((t) => (t.pnl ?? 0) > 0).map((t) => t.rMultiple ?? 0);
-  const lossRs = closed.filter((t) => (t.pnl ?? 0) < 0).map((t) => t.rMultiple ?? 0);
+  const winRs = closed.filter((t) => (t.pnl ?? 0) > 0).map(realizedR);
+  const lossRs = closed.filter((t) => (t.pnl ?? 0) < 0).map(realizedR);
   const avgWinR = winRs.length ? winRs.reduce((s, r) => s + r, 0) / winRs.length : 0;
   const avgLossR = lossRs.length ? lossRs.reduce((s, r) => s + r, 0) / lossRs.length : 0;
   const riskReward = avgLossR !== 0 ? Math.abs(avgWinR / avgLossR) : null;
@@ -165,7 +172,7 @@ export function buildRDistribution(trades: Trade[]): RDistributionBucket[] {
   ];
 
   for (const trade of closedTrades(trades)) {
-    const r = trade.rMultiple ?? 0;
+    const r = realizedR(trade);
     if (r < -2) buckets[0].count++;
     else if (r < -1) buckets[1].count++;
     else if (r < 0) buckets[2].count++;
@@ -200,12 +207,12 @@ function summarizeGroup(group: Trade[]): Omit<GroupedPerformance, "label"> {
   const netPnl = grossProfit - grossLoss;
   const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : null;
 
-  const rValues = group.map((t) => t.rMultiple ?? 0);
+  const rValues = group.map(realizedR);
   const totalR = rValues.reduce((sum, r) => sum + r, 0);
   const avgR = totalTrades ? totalR / totalTrades : 0;
 
-  const winRs = group.filter((t) => (t.pnl ?? 0) > 0).map((t) => t.rMultiple ?? 0);
-  const lossRs = group.filter((t) => (t.pnl ?? 0) < 0).map((t) => t.rMultiple ?? 0);
+  const winRs = group.filter((t) => (t.pnl ?? 0) > 0).map(realizedR);
+  const lossRs = group.filter((t) => (t.pnl ?? 0) < 0).map(realizedR);
   const avgWinR = winRs.length ? winRs.reduce((s, r) => s + r, 0) / winRs.length : 0;
   const avgLossR = lossRs.length ? lossRs.reduce((s, r) => s + r, 0) / lossRs.length : 0;
   const lossRate = totalTrades ? losses / totalTrades : 0;
