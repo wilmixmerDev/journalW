@@ -9,25 +9,26 @@ interface GroupedPerformanceChartProps {
 }
 
 interface BarShapeProps {
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
+  x?: string | number;
+  y?: string | number;
+  width?: string | number;
+  height?: string | number;
   payload?: GroupedPerformance;
 }
 
 /** Redondea solo la punta del dato (arriba si es positivo, abajo si es negativo) para que la barra quede anclada a la línea de 0. */
 function BarShape({ x = 0, y = 0, width = 0, height = 0, payload }: BarShapeProps) {
+  const nHeight = Number(height);
   const isPositive = (payload?.totalR ?? 0) >= 0;
   // Si la barra es más delgada que el radio, un radio fijo la hace ver como una gota flotando en vez de una barra plana.
-  const r = Math.min(4, Math.abs(height));
+  const r = Math.min(4, Math.abs(nHeight));
   const radius: [number, number, number, number] = isPositive ? [r, r, 0, 0] : [0, 0, r, r];
   return (
     <Rectangle
-      x={x}
-      y={y}
-      width={width}
-      height={height}
+      x={Number(x)}
+      y={Number(y)}
+      width={Number(width)}
+      height={nHeight}
       radius={radius}
       fill={isPositive ? "var(--pos)" : "var(--neg)"}
     />
@@ -35,19 +36,24 @@ function BarShape({ x = 0, y = 0, width = 0, height = 0, payload }: BarShapeProp
 }
 
 interface BarLabelProps {
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-  value?: number;
+  x?: string | number;
+  y?: string | number;
+  width?: string | number;
+  height?: string | number;
+  value?: string | number;
 }
 
 function BarLabel({ x = 0, y = 0, width = 0, height = 0, value = 0 }: BarLabelProps) {
-  const isPositive = value >= 0;
-  const labelY = isPositive ? y - 6 : y + height + 14;
+  const nx = Number(x);
+  const ny = Number(y);
+  const nWidth = Number(width);
+  const nHeight = Number(height);
+  const nValue = Number(value);
+  const isPositive = nValue >= 0;
+  const labelY = isPositive ? ny - 6 : ny + nHeight + 14;
   return (
-    <text x={x + width / 2} y={labelY} textAnchor="middle" fontSize={10} fill="var(--ink-2)">
-      {formatR(value)}
+    <text x={nx + nWidth / 2} y={labelY} textAnchor="middle" fontSize={10} fill="var(--ink-2)">
+      {formatR(nValue)}
     </text>
   );
 }
