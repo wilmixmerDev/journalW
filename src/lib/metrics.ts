@@ -309,3 +309,64 @@ export function performanceByWeekday(trades: Trade[]): GroupedPerformance[] {
         }
     );
 }
+
+const MONTHS_ES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
+/** A diferencia de groupBy, ordena por fecha (más antiguo primero) en vez de por cantidad de operaciones. */
+export function performanceByMonth(trades: Trade[]): GroupedPerformance[] {
+  const groups = new Map<string, Trade[]>();
+  for (const trade of closedTrades(trades)) {
+    const d = new Date(trade.enteredAt);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(trade);
+  }
+
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, group]) => {
+      const [year, month] = key.split("-");
+      return { label: `${MONTHS_ES[Number(month) - 1]} ${year}`, ...summarizeGroup(group) };
+    });
+}
+
+const WEEK_OF_MONTH_LABELS = ["Semana 1 (1-7)", "Semana 2 (8-14)", "Semana 3 (15-21)", "Semana 4+ (22-31)"];
+
+function weekOfMonthLabel(date: Date): string {
+  const day = date.getDate();
+  if (day <= 7) return WEEK_OF_MONTH_LABELS[0];
+  if (day <= 14) return WEEK_OF_MONTH_LABELS[1];
+  if (day <= 21) return WEEK_OF_MONTH_LABELS[2];
+  return WEEK_OF_MONTH_LABELS[3];
+}
+
+/** Compara cómo rindes al inicio, mitad y fin de mes (fatiga, sobreoperar tras un buen arranque, etc.). */
+export function performanceByWeekOfMonth(trades: Trade[]): GroupedPerformance[] {
+  const result = groupBy(trades, (t) => weekOfMonthLabel(new Date(t.enteredAt)));
+  return WEEK_OF_MONTH_LABELS.map(
+    (label) =>
+      result.find((r) => r.label === label) ?? {
+        label,
+        trades: 0,
+        winRate: 0,
+        netPnl: 0,
+        profitFactor: null,
+        totalR: 0,
+        avgR: 0,
+        expectancy: 0,
+      }
+  );
+}

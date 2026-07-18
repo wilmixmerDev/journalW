@@ -6,17 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/shared/metric-card";
 import { PerformanceTable } from "@/components/shared/performance-table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { EquityCurveChart } from "@/components/charts/equity-curve-chart";
 import { DisciplineCurveChart } from "@/components/charts/discipline-curve-chart";
 import { WinRateDonut } from "@/components/charts/win-rate-donut";
 import { RDistributionChart } from "@/components/charts/r-distribution-chart";
+import { GroupedPerformanceChart } from "@/components/charts/grouped-performance-chart";
 import { useJournalTrades } from "@/hooks/use-journal-trades";
 import {
   buildDisciplineCurve,
@@ -25,6 +19,7 @@ import {
   computeMetrics,
   performanceByEmotionAfter,
   performanceByEmotionBefore,
+  performanceByMonth,
   performanceByQuality,
   performanceBySession,
   performanceBySetup,
@@ -32,6 +27,7 @@ import {
   performanceByTag,
   performanceByTimeframe,
   performanceByWeekday,
+  performanceByWeekOfMonth,
   type GroupedPerformance,
 } from "@/lib/metrics";
 import { buildAiPrompt } from "@/lib/data-export";
@@ -48,18 +44,23 @@ interface AnalyticsClientProps {
 }
 
 const CATEGORIES = [
-  { value: "strategy", label: "Estrategia", build: performanceByStrategy },
-  { value: "setup", label: "Setup", build: performanceBySetup },
-  { value: "timeframe", label: "Timeframe", build: performanceByTimeframe },
-  { value: "session", label: "Sesión", build: performanceBySession },
-  { value: "weekday", label: "Día de la semana", build: performanceByWeekday },
-  { value: "quality", label: "Calidad de ejecución", build: performanceByQuality },
-  { value: "emotionBefore", label: "Estado emocional antes", build: performanceByEmotionBefore },
-  { value: "emotionAfter", label: "Estado emocional después", build: performanceByEmotionAfter },
-  { value: "tag", label: "Etiquetas", build: performanceByTag },
-] as const satisfies { value: string; label: string; build: (trades: Trade[]) => GroupedPerformance[] }[];
-
-type CategoryValue = (typeof CATEGORIES)[number]["value"];
+  { value: "month", label: "Mes", noun: "mes", build: performanceByMonth },
+  { value: "weekOfMonth", label: "Semana del mes", noun: "semana", build: performanceByWeekOfMonth },
+  { value: "weekday", label: "Día de la semana", noun: "día", build: performanceByWeekday },
+  { value: "strategy", label: "Estrategia", noun: "estrategia", build: performanceByStrategy },
+  { value: "setup", label: "Setup", noun: "setup", build: performanceBySetup },
+  { value: "timeframe", label: "Timeframe", noun: "timeframe", build: performanceByTimeframe },
+  { value: "session", label: "Sesión", noun: "sesión", build: performanceBySession },
+  { value: "quality", label: "Calidad de ejecución", noun: "nivel", build: performanceByQuality },
+  { value: "emotionBefore", label: "Estado emocional antes", noun: "estado", build: performanceByEmotionBefore },
+  { value: "emotionAfter", label: "Estado emocional después", noun: "estado", build: performanceByEmotionAfter },
+  { value: "tag", label: "Etiquetas", noun: "etiqueta", build: performanceByTag },
+] as const satisfies {
+  value: string;
+  label: string;
+  noun: string;
+  build: (trades: Trade[]) => GroupedPerformance[];
+}[];
 
 export function AnalyticsClient({ live, backtest, profile, email }: AnalyticsClientProps) {
   const trades = useJournalTrades(live, backtest);
@@ -67,11 +68,24 @@ export function AnalyticsClient({ live, backtest, profile, email }: AnalyticsCli
   const equityCurve = buildEquityCurve(trades);
   const disciplineCurve = buildDisciplineCurve(trades);
   const rDistribution = buildRDistribution(trades);
-
-  const [category, setCategory] = useState<CategoryValue>("strategy");
-  const activeCategory = CATEGORIES.find((c) => c.value === category) ?? CATEGORIES[0];
-  const categoryData = useMemo(() => activeCategory.build(trades), [activeCategory, trades]);
   const [isExporting, setIsExporting] = useState(false);
+
+  const categoryBreakdowns = useMemo(
+    () =>
+      CATEGORIES.map((c) => {
+        const data = c.build(trades);
+        const withTrades = data.filter((row) => row.trades > 0);
+        const insight =
+          withTrades.length < 2
+            ? null
+            : {
+                best: withTrades.reduce((a, b) => (b.totalR > a.totalR ? b : a)),
+                worst: withTrades.reduce((a, b) => (b.totalR < a.totalR ? b : a)),
+              };
+        return { ...c, data, insight };
+      }),
+    [trades]
+  );
 
   async function downloadData() {
     if (!profile) return;
@@ -189,26 +203,31 @@ export function AnalyticsClient({ live, backtest, profile, email }: AnalyticsCli
         </Card>
       </div>
 
-      <Card className="border-line bg-surface">
-        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-          <CardTitle>Rendimiento por categoría</CardTitle>
-          <Select value={category} onValueChange={(v) => v && setCategory(v as CategoryValue)}>
-            <SelectTrigger className="w-52">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CATEGORIES.map((c) => (
-                <SelectItem key={c.value} value={c.value}>
-                  {c.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardHeader>
-        <CardContent>
-          <PerformanceTable data={categoryData} />
-        </CardContent>
-      </Card>
+      {categoryBreakdowns.map((c) => (
+        <Card key={c.value} className="border-line bg-surface">
+          <CardHeader>
+            <CardTitle>Rendimiento por {c.label.toLowerCase()}</CardTitle>
+            {c.insight ? (
+              <p className="text-xs text-ink-3">
+                Tu mejor {c.noun}:{" "}
+                <span className="font-medium text-pos">
+                  {c.insight.best.label} ({c.insight.best.totalR >= 0 ? "+" : ""}
+                  {c.insight.best.totalR.toFixed(1)}R)
+                </span>
+                {" · "}Tu peor {c.noun}:{" "}
+                <span className="font-medium text-neg">
+                  {c.insight.worst.label} ({c.insight.worst.totalR >= 0 ? "+" : ""}
+                  {c.insight.worst.totalR.toFixed(1)}R)
+                </span>
+              </p>
+            ) : null}
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <GroupedPerformanceChart data={c.data} />
+            <PerformanceTable data={c.data} />
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
