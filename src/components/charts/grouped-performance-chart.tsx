@@ -9,10 +9,10 @@ interface GroupedPerformanceChartProps {
 }
 
 interface BarShapeProps {
-  x?: string | number;
-  y?: string | number;
-  width?: string | number;
-  height?: string | number;
+  x?: unknown;
+  y?: unknown;
+  width?: unknown;
+  height?: unknown;
   payload?: GroupedPerformance;
 }
 
@@ -36,11 +36,11 @@ function BarShape({ x = 0, y = 0, width = 0, height = 0, payload }: BarShapeProp
 }
 
 interface BarLabelProps {
-  x?: string | number;
-  y?: string | number;
-  width?: string | number;
-  height?: string | number;
-  value?: string | number;
+  x?: unknown;
+  y?: unknown;
+  width?: unknown;
+  height?: unknown;
+  value?: unknown;
 }
 
 function BarLabel({ x = 0, y = 0, width = 0, height = 0, value = 0 }: BarLabelProps) {
